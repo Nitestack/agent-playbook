@@ -67,7 +67,7 @@ is_registry_tool() {
 # its own guard.
 registry_allowed() {
   case "${W[1]:-} ${W[2]:-}" in
-    "drain "* | "show "* | "review add" | "review remove" | "coordinator add") return 0 ;;
+    "drain "* | "show "* | "review add" | "review snapshot" | "review remove" | "coordinator add") return 0 ;;
     "coordinator remove")
       if [ "${W[3]:-}" = "$tid" ]; then
         REASON="a coordinator must not remove its own registry entry"

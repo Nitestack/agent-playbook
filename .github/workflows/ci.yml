@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   checks:
-    name: hook tests and skill lint
+    name: hook tests, shell lint and skill lint
     runs-on: ubuntu-24.04
     steps:
       - name: Check out
@@ -20,19 +20,39 @@ jobs:
       - name: Hook tests
         run: bash hooks/tests/test-hooks.sh
 
+      - name: Shell lint
+        run: shellcheck -x -P SCRIPTDIR -S warning hooks/*.sh hooks/tests/*.sh
+
       - name: Skill lint
         run: |
           set -uo pipefail
           fail=0
 
-          # 1. skills/ holds only Markdown files: no scripts, shims, symlinks or binaries.
+          # 1. skills/ holds only regular Markdown files in two places:
+          #    skills/<name>/SKILL.md and skills/<name>/references/**/*.md.
+          #    No scripts, shims, symlinks, binaries or stray files.
           while IFS= read -r path; do
-            echo "::error file=$path::non-Markdown entry in skills/"
-            fail=1
-          done < <(find skills -mindepth 1 ! -type d ! -name '*.md')
+            if [ -L "$path" ]; then
+              echo "::error file=$path::symlink in skills/"
+              fail=1
+            elif [ -d "$path" ]; then
+              [[ $path =~ ^skills/[^/]+$ || $path =~ ^skills/[^/]+/references(/.+)?$ ]] || {
+                echo "::error file=$path::unexpected directory in skills/"
+                fail=1
+              }
+            elif [ -f "$path" ]; then
+              [[ $path =~ ^skills/[^/]+/SKILL\.md$ || $path =~ ^skills/[^/]+/references/.+\.md$ ]] || {
+                echo "::error file=$path::only SKILL.md and references/**/*.md are allowed in skills/"
+                fail=1
+              }
+            else
+              echo "::error file=$path::not a regular file in skills/"
+              fail=1
+            fi
+          done < <(find skills -mindepth 1)
 
-          # 2. Every skill directory has a SKILL.md whose frontmatter has a name that
-          #    matches the directory, and a description.
+          # 2. Every skill directory has a SKILL.md with closed frontmatter, a name
+          #    that matches the directory, and a description.
           names=()
           for dir in skills/*/; do
             dir=${dir%/}
@@ -43,24 +63,33 @@ jobs:
               fail=1
               continue
             fi
-            if [ "$(head -n 1 "$file")" != "---" ]; then
-              echo "::error file=$file::no frontmatter (first line must be ---)"
+            if [ "$(head -n 1 "$file")" != "---" ] || ! tail -n +2 "$file" | grep -qx -- '---'; then
+              echo "::error file=$file::frontmatter must start and end with a --- line"
               fail=1
               continue
             fi
-            name=$(sed -n '2,/^---$/{s/^name:[[:space:]]*//p;}' "$file" | head -n 1)
+            front=$(sed -n '2,/^---$/p' "$file" | sed '$d')
+            name=$(sed -n 's/^name:[[:space:]]*//p' <<<"$front" | head -n 1)
             if [ "$name" != "$base" ]; then
               echo "::error file=$file::frontmatter name '$name' does not match directory '$base'"
               fail=1
             fi
-            if ! sed -n '2,/^---$/p' "$file" | grep -q '^description:[[:space:]]*[^[:space:]]'; then
+            if ! grep -q '^description:[[:space:]]*[^[:space:]]' <<<"$front"; then
               echo "::error file=$file::frontmatter has no description"
               fail=1
             fi
             names+=("$name")
+
+            # 3. Every references/ file the skill names exists.
+            while IFS= read -r ref; do
+              if [ ! -f "$dir/$ref" ]; then
+                echo "::error file=$file::names $ref, which does not exist"
+                fail=1
+              fi
+            done < <(grep -o 'references/[A-Za-z0-9._/-]*\.md' "$file" | sort -u)
           done
 
-          # 3. Skill names are unique across the set.
+          # 4. Skill names are unique across the set.
           dupes=$(printf '%s\n' "${names[@]}" | sort | uniq -d)
           if [ -n "$dupes" ]; then
             echo "::error::duplicate skill names: $dupes"

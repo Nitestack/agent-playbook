@@ -5,9 +5,16 @@
 #   playbook-registry.sh coordinator add <thread-id>
 #   playbook-registry.sh coordinator remove <thread-id>
 #   playbook-registry.sh drain <handoff-marker>
+#   playbook-registry.sh review snapshot <thread-id> <repo> <base-oid> <head-oid>
 #   playbook-registry.sh review add <thread-id> <snapshot-root>
 #   playbook-registry.sh review remove <thread-id>
 #   playbook-registry.sh show coordinator|review
+#
+# `review snapshot` exports every tracked file of <head-oid> into a fresh
+# directory (tree/, no .git, no export attributes applied), refuses an
+# incomplete export, writes REVIEW.patch (base..head) next to tree/, makes it
+# read-only, registers it for the reviewer thread and prints its path.
+# `review remove` unregisters the thread and deletes a snapshot made that way.
 #
 # `drain` marks the calling thread ($PLAYBOOK_THREAD_ID, else $T3CODE_THREAD_ID)
 # as draining and stores the handoff marker that lets its successor launch
@@ -32,7 +39,7 @@ die() {
 }
 
 usage() {
-  sed -n '4,10s/^#   //p' "${BASH_SOURCE[0]}" >&2
+  sed -n '4,11s/^#   //p' "${BASH_SOURCE[0]}" >&2
   exit 1
 }
 
@@ -57,6 +64,43 @@ update() {
     die "could not update $file"
   fi
   mv -f -- "$tmp" "$file"
+}
+
+# snapshot <thread-id> <repo> <base-oid> <head-oid>: build, check and register a review snapshot.
+snapshot() {
+  local tid=$1 repo=$2 base=$3 head=$4 root oid
+  for oid in "$base" "$head"; do
+    [[ $oid =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || die "$oid is not a full commit id"
+    git -C "$repo" cat-file -e "$oid^{commit}" 2>/dev/null || die "$oid is not a commit in $repo"
+  done
+  root=$(mktemp -d -t playbook-review.XXXXXX)
+  GIT_INDEX_FILE=$root/.index git -C "$repo" read-tree "$head"
+  GIT_INDEX_FILE=$root/.index git -C "$repo" checkout-index --all --prefix="$root/tree/"
+  rm -f -- "$root/.index"
+  mkdir -p -- "$root/tree"
+  if ! diff -q <(git -C "$repo" -c core.quotePath=false ls-tree -r --name-only "$head") \
+    <(cd "$root/tree" && find . ! -type d | sed 's|^\./||' | LC_ALL=C sort) >/dev/null; then
+    rm -rf -- "$root"
+    die "the export of $head is incomplete (submodules or unsupported entries); review it another way"
+  fi
+  git -C "$repo" diff "$base" "$head" >"$root/REVIEW.patch"
+  printf '%s %s\n' "$base" "$head" >"$root/.playbook-snapshot"
+  chmod -R a-w -- "$root"
+  update "$reviews" '.[$t] = {snapshot_root: $r}' --arg t "$tid" --arg r "$root"
+  printf '%s\n' "$root"
+}
+
+# unregister_review <thread-id>: drop the entry; delete the snapshot if `snapshot` made it.
+unregister_review() {
+  local tid=$1 root=""
+  if [ -r "$reviews" ]; then
+    root=$(jq -r --arg t "$tid" '.[$t].snapshot_root // ""' "$reviews" 2>/dev/null) || root=""
+  fi
+  update "$reviews" 'del(.[$t])' --arg t "$tid"
+  if [ -n "$root" ] && [ -f "$root/.playbook-snapshot" ]; then
+    chmod -R u+w -- "$root"
+    rm -rf -- "$root"
+  fi
 }
 
 need() {
@@ -89,7 +133,11 @@ case $1 in
         root=$(realpath -e -- "$4" 2>/dev/null) && [ -d "$root" ] || die "snapshot root $4 is not a directory"
         update "$reviews" '.[$t] = {snapshot_root: $r}' --arg t "$3" --arg r "$root"
         ;;
-      remove) update "$reviews" 'del(.[$t])' --arg t "$3" ;;
+      snapshot)
+        need $# 6
+        snapshot "$3" "$4" "$5" "$6"
+        ;;
+      remove) unregister_review "$3" ;;
       *) usage ;;
     esac
     ;;

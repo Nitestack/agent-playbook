@@ -472,6 +472,47 @@ expect_deny "reviewer: relative Grep from a cwd outside the snapshot" "$REVIEWER
 expect_deny "reviewer: Codex shell is denied" "$REVIEWER" \
   "$(codex_call '["bash","-lc","cat a.md"]' "$snap")" "${REVIEW_ENV[@]}"
 
+# Review snapshots: exact, export attributes ignored, patch beside the tree, torn down.
+src=$tmp/src
+mkdir -p "$src"
+git -C "$src" init -q -b main
+git -C "$src" config user.name fixture
+git -C "$src" config user.email fixture@example.invalid
+git -C "$src" config commit.gpgsign false
+git -C "$src" config core.hooksPath ''
+echo one >"$src/a.txt"
+git -C "$src" add -A
+git -C "$src" commit -qm base
+snap_base=$(git -C "$src" rev-parse HEAD)
+printf 'hidden.txt export-ignore\n' >"$src/.gitattributes"
+echo hidden >"$src/hidden.txt"
+echo tracked >"$src/REVIEW.patch"
+echo two >"$src/a.txt"
+git -C "$src" add -A
+git -C "$src" commit -qm head
+snap_head=$(git -C "$src" rev-parse HEAD)
+root=$(registry bash "$hooks/playbook-registry.sh" review snapshot rev-snap "$src" "$snap_base" "$snap_head" 2>"$tmp/check-err") || root=""
+check "snapshot: built and registered" test -n "$root"
+check "snapshot: export-ignore files are present" test -f "$root/tree/hidden.txt"
+check "snapshot: a tracked REVIEW.patch keeps its content" grep -qx tracked "$root/tree/REVIEW.patch"
+check "snapshot: the diff sits beside the tree" grep -q '^+two' "$root/REVIEW.patch"
+check "snapshot: no .git inside" test ! -e "$root/tree/.git"
+check "snapshot: read-only" test ! -w "$root/tree/a.txt"
+check "snapshot: registry points at it" jq -e --arg r "$root" '.["rev-snap"].snapshot_root == $r' "$reviews_reg"
+expect_allow "snapshot: the reviewer reads the tree" "$REVIEWER" \
+  "$(tool_call Read "{\"file_path\":\"$root/tree/a.txt\"}")" "${regenv[@]}" T3CODE_THREAD_ID=rev-snap
+expect_allow "coord: may build a snapshot" "$COORD" \
+  "$(bash_call "playbook-registry.sh review snapshot rev-x $src $snap_base $snap_head")" "${regenv[@]}" T3CODE_THREAD_ID=shift-2
+if registry bash "$hooks/playbook-registry.sh" review snapshot rev-bad "$src" HEAD "$snap_head" >/dev/null 2>&1; then
+  fail=$((fail + 1))
+  echo "FAIL: snapshot: a mutable ref must be refused"
+else
+  pass=$((pass + 1))
+fi
+check "snapshot: remove unregisters" registry bash "$hooks/playbook-registry.sh" review remove rev-snap
+check "snapshot: remove deletes the snapshot" test ! -e "$root"
+check "snapshot: the entry is gone" jq -e 'has("rev-snap") | not' "$reviews_reg"
+
 # ── Summary ────────────────────────────────────────────────────────────
 echo "test-hooks: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
