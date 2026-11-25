@@ -3,10 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Plan (software kind): hero alone on screen one; then what it is, the repo layout, three tiers, the shift
-     loop (dealt moment: the wakeup ring), the PR path, ten skills in two groups, guard hooks (dark band),
-     setup with and without Nix, the R1 to R15 archive, adoption, footer. No photographs, no effects,
-     no external resources. Radius soft, one solid button, system font stacks (no CDN). -->
 <meta name="page-type" content="software">
 <meta name="site-kind" content="software">
 <title>agent-playbook: skills, templates and guard hooks for agent repos</title>
@@ -46,8 +42,8 @@
 <section class="hero" style="--h: 1" data-enter aria-labelledby="hero-h">
   <div class="wrap hero__grid">
     <div class="hero__text hero-text">
-      <h1 id="hero-h" data-enter-item>Agent playbook: skills, templates and guard hooks for agent repos</h1>
-      <p class="hero__lead" data-enter-item>A portable kit of plain files. It holds ten workflow skills, templates that bootstrap a repo, three <code>PreToolUse</code> guard hooks and a frozen archive of the decisions behind them. Bash, jq and coreutils are enough to run the hooks.</p>
+      <h1 id="hero-h" data-enter-item>agent-playbook: skills, templates and guard hooks for agent repos</h1>
+      <p class="hero__lead" data-enter-item>A portable kit of plain files. It holds ten workflow skills, templates that bootstrap a repo, three <code>PreToolUse</code> guard hooks and a frozen archive of the decisions behind them. The hooks need bash 4, jq, git and GNU coreutils, nothing else.</p>
       <ul class="facts" data-enter-item aria-label="Repository facts">
         <li><strong>10</strong> workflow skills</li>
         <li><strong>3</strong> guard hooks</li>
@@ -63,7 +59,7 @@
       <div class="term__bar" aria-hidden="true"><span></span><span></span><span></span></div>
       <p class="sr-only" id="term-h">Terminal output of the hook test suite at this commit</p>
       <pre class="term__body"><span class="prompt">$</span> bash hooks/tests/test-hooks.sh
-test-hooks: 156 passed, 0 failed</pre>
+test-hooks: 266 passed, 0 failed</pre>
     </figure>
   </div>
 </section>
@@ -99,7 +95,7 @@ test-hooks: 156 passed, 0 failed</pre>
 <section class="section" style="--h: 1" id="structure" aria-labelledby="structure-h">
   <div class="wrap">
     <h2 id="structure-h">What the repository holds</h2>
-    <p class="lead measure">Five top-level parts. Each one has a single job; the blueprint and the README say which file does what.</p>
+    <p class="lead measure">Six top-level parts. Each one has a single job; the blueprint and the README say which file does what.</p>
     <div class="tree" role="group" aria-label="Repository layout">
       <div class="tree__root"><code>agent-playbook/</code></div>
       <div class="tree__grid">
@@ -109,7 +105,7 @@ test-hooks: 156 passed, 0 failed</pre>
         </article>
         <article class="card">
           <h3><code>hooks/</code></h3>
-          <p>Bash guards for the coordinator, worker and reviewer roles, a shared <code>guard-lib.sh</code>, and <code>tests/test-hooks.sh</code>.</p>
+          <p>Bash guards for the coordinator, worker and reviewer roles, a shared <code>guard-lib.sh</code>, <code>playbook-registry.sh</code>, which writes the guard registries and builds review snapshots, and <code>tests/test-hooks.sh</code>.</p>
         </article>
         <article class="card">
           <h3><code>docs/</code></h3>
@@ -117,11 +113,15 @@ test-hooks: 156 passed, 0 failed</pre>
         </article>
         <article class="card">
           <h3><code>.github/</code></h3>
-          <p><code>workflows/ci.yml</code> runs the hook tests and a skill lint: Markdown only, names match their directories, names unique.</p>
+          <p><code>workflows/ci.yml</code> runs the hook tests, <code>shellcheck</code> and a skill lint: regular Markdown files only, closed frontmatter, names match their directories and are unique, named references exist.</p>
         </article>
         <article class="card">
           <h3>Root files</h3>
-          <p><code>README.md</code> for users, <code>AGENTS.md</code> for working on this repository, and <code>CLAUDE.md</code>, which only points to <code>AGENTS.md</code>.</p>
+          <p><code>README.md</code> for users, <code>AGENTS.md</code> for working on this repository, <code>CLAUDE.md</code>, which only points to <code>AGENTS.md</code>, and the Apache-2.0 <code>LICENSE</code>.</p>
+        </article>
+        <article class="card">
+          <h3><code>site/</code></h3>
+          <p>This overview page: one HTML file, one stylesheet, one small script. Nothing is loaded from another host.</p>
         </article>
       </div>
     </div>
@@ -171,10 +171,10 @@ test-hooks: 156 passed, 0 failed</pre>
         </ul>
         <h3>Rotation drains, cancels and hands off</h3>
         <ol class="steps">
-          <li><strong>Freeze.</strong> No new dispatches while draining.</li>
-          <li><strong>Drain for up to 15 minutes,</strong> then cancel what is left and bump the shift generation.</li>
-          <li><strong>Stop at two cancellations.</strong> If cancellations reach two, the shift stops rotating and escalates to the owner. It never cancels a third time.</li>
-          <li><strong>Hand off.</strong> The successor records receipt, attaches its watches, schedules a 20-minute heartbeat and acknowledges. Only then does the predecessor stop.</li>
+          <li><strong>Freeze.</strong> The coordinator runs <code>playbook-registry.sh drain &lt;marker&gt;</code>; its guard then refuses new dispatches, except the successor launch that carries the marker.</li>
+          <li><strong>Drain for up to 15 minutes,</strong> then cancel what is left with the host's cancel tool and bump the shift generation.</li>
+          <li><strong>Stop after two forced rotations.</strong> A rotation that had to cancel children counts once, however many it cancelled. After the second, the shift stops rotating and escalates to the owner. It never starts a third.</li>
+          <li><strong>Hand off.</strong> The successor registers itself, records receipt, attaches its watches, schedules a 20-minute heartbeat and acknowledges, then removes its predecessor's registry entry. Only then does the predecessor stop.</li>
         </ol>
       </div>
 
@@ -212,7 +212,7 @@ test-hooks: 156 passed, 0 failed</pre>
           </svg>
         </div>
         <div class="loop-figure__controls">
-          <button type="button" class="pause" data-loop-toggle aria-pressed="false">Pause the loop</button>
+          <button type="button" class="pause" data-loop-toggle aria-pressed="false">Pause the animation</button>
         </div>
       </figure>
     </div>
@@ -221,7 +221,7 @@ test-hooks: 156 passed, 0 failed</pre>
       <h3>Each wakeup runs one pass, then ends the turn</h3>
       <ol class="steps">
         <li><strong>Verify completions</strong> by exact PR, branch and SHA.</li>
-        <li><strong>Advance PRs:</strong> send green work to <code>blind-review</code>, route fixes to <code>rebase-and-fix</code>, hand approved work to <code>publish-pr</code>.</li>
+        <li><strong>Advance PRs:</strong> build a review snapshot and send green work to <code>blind-review</code>, route fixes to <code>rebase-and-fix</code>, hand work with approval evidence to <code>publish-pr</code>.</li>
         <li><strong>Refill slots</strong> with the next ready ticket.</li>
         <li><strong>Hygiene:</strong> settle finished children; clean up only confirmed merges.</li>
         <li><strong>Stop the turn.</strong> Children and publish jobs run on their own.</li>
@@ -238,14 +238,14 @@ test-hooks: 156 passed, 0 failed</pre>
     <ol class="path" aria-label="Path of one pull request">
       <li class="path__step"><span class="path__name">ticket-implement</span><span class="path__note">one issue, one PR, exact SHAs</span></li>
       <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">fresh, read-only, one tuple</span></li>
-      <li class="path__step path__step--accent"><span class="path__name">publish-pr</span><span class="path__note">APPROVE and green: exact-SHA fast-forward</span></li>
+      <li class="path__step path__step--accent"><span class="path__name">publish-pr</span><span class="path__note">approval evidence and green CI: exact-SHA fast-forward</span></li>
       <li class="path__step"><span class="path__name">safe-cleanup</span><span class="path__note">merged work only</span></li>
     </ol>
     <div class="path-back">
-      <p class="path-back__label">REQUEST_CHANGES or NEEDS_REBASE, from blind-review:</p>
+      <p class="path-back__label">REQUEST_CHANGES from blind-review, or NEEDS_REBASE from publish-pr:</p>
       <ol class="path path--back">
-        <li class="path__step"><span class="path__name">rebase-and-fix</span><span class="path__note">classify the change, then push with a lease</span></li>
-        <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">again, on the new head</span></li>
+        <li class="path__step"><span class="path__name">rebase-and-fix</span><span class="path__note">classify the change, push with a lease (Tier 2: hand off to the publisher)</span></li>
+        <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">the review the classification asks for, on the new tuple</span></li>
       </ol>
     </div>
     <ul class="pr-notes measure">
@@ -339,19 +339,19 @@ test-hooks: 156 passed, 0 failed</pre>
         <tbody>
           <tr>
             <th scope="row" data-label="Role">Coordinator</th>
-            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create and comment, GET-only <code>gh api</code>, the publish broker</td>
-            <td data-label="Denies">Repo writes, builds, tests, mutating git, merges, new dispatches while draining</td>
-            <td data-label="Active when">The thread id is listed in the coordinator registry</td>
+            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create and comment, GET-only <code>gh api</code>, the publish broker, <code>playbook-registry.sh</code> except removing itself</td>
+            <td data-label="Denies">Repo writes, builds, tests, mutating git, merges by CLI or forge tool, wait loops, new dispatches while draining</td>
+            <td data-label="Active when">The thread id (<code>PLAYBOOK_THREAD_ID</code>, else <code>T3CODE_THREAD_ID</code>) is listed in the coordinator registry</td>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Worker</th>
-            <td data-label="Allows">Writes inside its own worktree; pushes to its feature branch</td>
-            <td data-label="Denies">Writes outside the worktree; pushes to <code>main</code>, <code>master</code> or <code>develop</code></td>
+            <td data-label="Allows">Writes inside its own worktree; pushes only to <code>PLAYBOOK_WORKER_BRANCH</code> when it is set</td>
+            <td data-label="Denies">Writes outside the worktree; pushes to protected branches (<code>PLAYBOOK_PROTECTED_BRANCHES</code>, default <code>main master develop</code>)</td>
             <td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set</td>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Reviewer</th>
-            <td data-label="Allows"><code>Read</code>, <code>Grep</code> and <code>Glob</code> inside the review snapshot</td>
+            <td data-label="Allows">Claude Code's <code>Read</code>, <code>Grep</code> and <code>Glob</code> inside the review snapshot. Codex reviewers use Codex's read-only sandbox instead.</td>
             <td data-label="Denies">Bash, write tools, MCP tools, web access, sub-agents, paths outside the snapshot</td>
             <td data-label="Active when">The thread id is in the review registry and its entry names a <code>snapshot_root</code></td>
           </tr>
@@ -361,7 +361,7 @@ test-hooks: 156 passed, 0 failed</pre>
 
     <ol class="guard-flow" aria-label="How a guard decides">
       <li class="guard-flow__step">A tool call arrives.</li>
-      <li class="guard-flow__step guard-flow__step--branch">The thread or environment is not registered? <span>Exit 0 at once: allowed, nothing read.</span></li>
+      <li class="guard-flow__step guard-flow__step--branch">The guard is not active for this thread? <span>Exit 0 at once: allowed, nothing read.</span></li>
       <li class="guard-flow__step">The role's rules check the call.</li>
       <li class="guard-flow__step guard-flow__step--no">Allowed: exit 0. Denied: the reason is printed, exit 2.</li>
     </ol>
@@ -376,7 +376,7 @@ worker-guard: Edit may only write inside the worktree (&lt;worktree&gt;); refuse
 reviewer-guard: Bash is not allowed for independent reviewers; only Read, Grep and Glob inside the snapshot</code></pre>
     </div>
 
-    <p class="note measure">The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary. The hard boundaries are the credential and publishing boundaries of Tier 2. The suite in <code>hooks/tests/test-hooks.sh</code> passes at this commit: 156 checks, 0 failed.</p>
+    <p class="note measure">The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary. The hard boundaries are the credential and publishing boundaries of Tier 2. The suite in <code>hooks/tests/test-hooks.sh</code> passes at this commit: 266 checks, 0 failed.</p>
   </div>
 </section>
 
@@ -384,57 +384,55 @@ reviewer-guard: Bash is not allowed for independent reviewers; only Read, Grep a
 <section class="section" style="--h: 2" id="setup" aria-labelledby="setup-h">
   <div class="wrap">
     <h2 id="setup-h">Set it up with Nix, or without</h2>
-    <p class="lead measure">Nix is optional. The playbook is a plain source tree; either way you reference its files by path.</p>
+    <p class="lead measure">Nix is optional. The skills and templates are Markdown. The hooks need bash 4 or newer, <code>jq</code>, <code>git</code> and GNU coreutils; on macOS install GNU coreutils first, or the BSD <code>realpath</code> makes the guards deny everything.</p>
     <div class="cards cards--2">
       <article class="card">
-        <h3>With Nix</h3>
-        <p>Add the playbook as a non-flake input, then reference the files as paths.</p>
-<pre class="code"><code>{
-  inputs.agent-playbook = {
-    url = "github:&lt;owner&gt;/agent-playbook";
-    flake = false;
-  };
-  # Reference files as paths, for example:
-  #   "${agent-playbook}/skills/orchestrate"
-  #   "${agent-playbook}/hooks/coordinator-guard.sh"
+        <h3>With Nix and Home Manager</h3>
+        <p>Add the playbook as a non-flake input, pass it to Home Manager, and link every skill:</p>
+<pre class="code"><code>inputs.agent-playbook = {
+  url = "github:Nitestack/agent-playbook";
+  flake = false;
+};
+
+# A Home Manager module:
+{ lib, agent-playbook, ... }:
+let skills = lib.filterAttrs (_: t: t == "directory")
+  (builtins.readDir "${agent-playbook}/skills");
+in {
+  home.file = lib.mapAttrs' (name: _:
+    lib.nameValuePair ".claude/skills/${name}"
+      { source = "${agent-playbook}/skills/${name}"; }) skills;
 }</code></pre>
-        <p>Deploy only the <code>SKILL.md</code> files and <code>references/**/*.md</code>. Do not deploy scripts from third-party packs.</p>
-        <p>To test a local checkout without pushing:</p>
-<pre class="code"><code>nix flake check --override-input agent-playbook git+file:///path/to/agent-playbook</code></pre>
+        <p>CI keeps <code>skills/</code> Markdown-only, so this deploys no scripts. Hook commands point at <code>${agent-playbook}/hooks/</code>.</p>
       </article>
       <article class="card">
         <h3>Without Nix</h3>
-        <p>Symlink the skills you want into your agent's skill directory. Other agents read their own directories, for example <code>~/.codex/skills/</code> or <code>~/.agents/skills/</code>.</p>
-<pre class="code"><code>for s in /path/to/agent-playbook/skills/*/; do
-  ln -s "${s%/}" ~/.claude/skills/
+        <p>Symlink the skills into your agent's skill directory. Reruns replace the loop's own links and skip anything else with the same name. Other agents read <code>~/.codex/skills/</code> or <code>~/.agents/skills/</code>.</p>
+<pre class="code"><code>dest=~/.claude/skills
+mkdir -p "$dest"
+for s in /path/to/agent-playbook/skills/*/; do
+  name=$(basename "$s")
+  if [ -e "$dest/$name" ] && [ ! -L "$dest/$name" ]; then
+    echo "skip $name"; continue
+  fi
+  ln -sfn "${s%/}" "$dest/$name"
 done</code></pre>
-        <p>The hooks need only <code>bash</code>, <code>jq</code> and coreutils. In Claude Code, add them to <code>~/.claude/settings.json</code>:</p>
-<pre class="code"><code>{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [
-        { "type": "command", "command": "/path/to/agent-playbook/hooks/coordinator-guard.sh" },
-        { "type": "command", "command": "/path/to/agent-playbook/hooks/worker-guard.sh" },
-        { "type": "command", "command": "/path/to/agent-playbook/hooks/reviewer-guard.sh" }
-      ] }
-    ]
-  }
-}</code></pre>
+        <p>Register the three guards as <code>PreToolUse</code> hooks in <code>~/.claude/settings.json</code> or <code>~/.codex/hooks.json</code>; the README has both snippets.</p>
       </article>
     </div>
 
     <div class="table-wrap">
       <table class="table">
-        <caption>Guard settings: each guard is configured by one environment variable, set only in the process to guard</caption>
-        <thead><tr><th scope="col">Variable</th><th scope="col">Activates</th><th scope="col">Default registry</th></tr></thead>
+        <caption>When each guard is active</caption>
+        <thead><tr><th scope="col">Guard</th><th scope="col">Active when</th><th scope="col">Settings</th></tr></thead>
         <tbody>
-          <tr><td data-label="Variable"><code>PLAYBOOK_COORDINATOR_REGISTRY</code></td><td data-label="Activates"><code>coordinator-guard.sh</code></td><td data-label="Default registry"><code>~/.local/state/agent-playbook/coordinator-threads.json</code></td></tr>
-          <tr><td data-label="Variable"><code>PLAYBOOK_WORKER_WORKTREE</code></td><td data-label="Activates"><code>worker-guard.sh</code>, set to the worker's worktree</td><td data-label="Default registry">none</td></tr>
-          <tr><td data-label="Variable"><code>PLAYBOOK_REVIEW_REGISTRY</code></td><td data-label="Activates"><code>reviewer-guard.sh</code></td><td data-label="Default registry"><code>~/.local/state/agent-playbook/review-threads.json</code></td></tr>
+          <tr><td data-label="Guard"><code>coordinator-guard.sh</code></td><td data-label="Active when">the thread id is in the coordinator registry</td><td data-label="Settings"><code>PLAYBOOK_COORDINATOR_REGISTRY</code> overrides the registry path</td></tr>
+          <tr><td data-label="Guard"><code>worker-guard.sh</code></td><td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set</td><td data-label="Settings"><code>PLAYBOOK_WORKER_BRANCH</code>, <code>PLAYBOOK_PROTECTED_BRANCHES</code></td></tr>
+          <tr><td data-label="Guard"><code>reviewer-guard.sh</code></td><td data-label="Active when">the thread id is in the review registry with a <code>snapshot_root</code></td><td data-label="Settings"><code>PLAYBOOK_REVIEW_REGISTRY</code> overrides the registry path</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note measure">Check the kit locally with <code>bash hooks/tests/test-hooks.sh</code>. CI runs the same suite, then the skill lint.</p>
+    <p class="note measure">The thread id is <code>PLAYBOOK_THREAD_ID</code>, or <code>T3CODE_THREAD_ID</code> in T3 Code. Write the registries with <code>hooks/playbook-registry.sh</code>, never by hand. Check the kit with <code>bash hooks/tests/test-hooks.sh</code>.</p>
   </div>
 </section>
 
@@ -511,9 +509,9 @@ done</code></pre>
       <article class="card">
         <h3>Tier 2: several hosts publish</h3>
         <ul class="rules">
-          <li>Workers hold no push credentials. One publisher, under one lock, does every push.</li>
+          <li>Workers hold no push credentials. They hand their branch and SHAs to one publisher, which does every push under one lock.</li>
           <li>Policy paths need the owner's signed approval on the exact head.</li>
-          <li>Set host caps: pause heavy jobs above memory, pressure or disk thresholds, and resume below the lower ones.</li>
+          <li>Set host caps: pause heavy jobs when memory or pressure rise above their high thresholds or free disk falls below its floor, and resume once they recover.</li>
         </ul>
       </article>
     </div>

@@ -259,6 +259,7 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) { padding-bottom: 1px; }
 }
 .pause:hover { background: rgba(27, 29, 32, 0.06); transform: translateY(-1px); }
 .pause:active { transform: translateY(1px) scale(0.985); transition-duration: 90ms; }
+.pause[aria-pressed="true"] { background: rgba(27, 29, 32, 0.1); }
 
 .steps { list-style: none; counter-reset: step; display: grid; gap: var(--s-3); margin-bottom: var(--s-6); }
 .steps li { counter-increment: step; position: relative; padding-left: 40px; }
@@ -457,8 +458,7 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) { padding-bottom: 1px; }
 .cards--3 > * { grid-column: span 4; }
 .cards--4 > * { grid-column: span 3; }
 .tree__grid { border-left: 0; padding-left: 0; }
-.tree__grid > .card:nth-child(-n+3) { grid-column: span 4; }
-.tree__grid > .card:nth-child(n+4) { grid-column: span 6; }
+.tree__grid > .card { grid-column: span 4; }
 .guard-flow { list-style: none; margin: var(--s-7) 0 0; padding: 0; }
 .guard-flow__step { grid-column: span 3; }
 .path__step { grid-column: span 3; }
@@ -466,11 +466,10 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) { padding-bottom: 1px; }
 .path--back { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 
 @media (min-width: 1024px) {
-  /* One section per screen: each is exactly --h screens tall under the 73px header. */
+  /* One section per screen: each is at least --h screens tall under the 73px header, and grows when its content needs more. */
   .hero, .section, .closing {
-    height: calc(var(--h, 1) * (100svh - var(--nav-h)));
+    min-height: calc(var(--h, 1) * (100svh - var(--nav-h)));
     display: flex; flex-direction: column; justify-content: flex-start;
-    overflow: hidden;
   }
   .hero { padding: 96px 0 64px; }
   .section { padding: 96px 0 72px; }
@@ -505,7 +504,7 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) { padding-bottom: 1px; }
    and the sections stand on whole screens. The hero's top padding clears the header. */
 @media (min-width: 1024px) {
   .nav { position: fixed; top: 0; left: 0; right: 0; }
-  .hero, .section, .closing { height: calc(var(--h, 1) * 100svh); }
+  .hero, .section, .closing { min-height: calc(var(--h, 1) * 100svh); }
   section[id], footer[id] { scroll-margin-top: 0; }
   .hero { padding-top: 104px; }
 }
@@ -516,4 +515,5 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) { padding-bottom: 1px; }
   .hero-text > .btn-row { order: 3; }
   .hero-text > .facts { order: 4; }
   .footer-links { grid-template-columns: minmax(0, 1fr); }
+  .nav__action { display: none; }
 }
