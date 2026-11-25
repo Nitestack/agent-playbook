@@ -111,3 +111,9 @@ bash hooks/tests/test-hooks.sh
 ```
 
 CI runs the same suite, then checks that `skills/` holds only Markdown files and that each `SKILL.md` has a frontmatter `name:` equal to its directory and a unique name. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE). This covers everything in the repo: skills, templates, hooks, docs and the overview page.
+
+You may use, copy and adapt these files in private and commercial projects, including copying a template into your own repo's `AGENTS.md`. Keep the license notice when you redistribute the files themselves.
