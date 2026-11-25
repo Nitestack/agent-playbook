@@ -4,7 +4,7 @@ A portable kit for agent-driven development: workflow skills, repo bootstrap tem
 
 ## Overview page
 
-A visual overview of the whole repository (structure, tiers, the shift workflow, every skill, guard hooks, setup, the R1 to R15 archive and how to adopt it) is published at <https://nitestack.github.io/agent-playbook/site/>; the source is [`site/index.html`](site/index.html), which also opens straight from a checkout. It is one self-contained page: no fonts, scripts or images are loaded from elsewhere, and its file links point to this repository on GitHub.
+A visual overview of the whole repository (structure, tiers, the shift workflow, every skill, guard hooks, setup, the R1 to R15 archive and how to adopt it) is published at <https://nitestack.github.io/agent-playbook/>; the source is [`site/index.html`](site/index.html), which also opens straight from a checkout. It is one self-contained page: no fonts, scripts or images are loaded from elsewhere, and its file links point to this repository on GitHub.
 
 ## What is inside
 
