@@ -18,6 +18,7 @@ jobs:
     name: publish site/ to GitHub Pages
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: read
       pages: write
       id-token: write
