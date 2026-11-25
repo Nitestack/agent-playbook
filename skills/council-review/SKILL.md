@@ -28,7 +28,7 @@ A council is a discussion, not parallel monologues: every reviewer reads and ans
 
 ## 1b. Independence: Give as Little Context as Possible
 - Start every reviewer cold: no orchestrator transcript, no earlier conclusions, no hint of what the judge expects or prefers, no author self-assessment.
-- The brief names what to check, not what to find. Let reviewers read the artifact themselves instead of summarising it for them.
+- The brief names what to check, not what to find. Let reviewers read the artifact themselves instead of summarizing it for them.
 - Different model families are welcome when configured, but independence comes from cold, read-only contexts first.
 
 ## 2. Evidence-Based Triage (Anti-Sycophancy)

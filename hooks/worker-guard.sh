@@ -33,7 +33,7 @@
 #     the worktree is on one.
 #
 # Reads are unrestricted. Interpreters (python, node, ...) are not inspected.
-# Not a defence against a determined adversary; it stops a well-meaning worker
+# Not a defense against a determined adversary; it stops a well-meaning worker
 # from writing outside its worktree or pushing to a shared branch.
 
 set -uo pipefail
@@ -309,7 +309,7 @@ unwrap() {
         while ((${#W[@]} > 0)) && [[ ${W[0]} == -* || ${W[0]} == *=* ]]; do
           case ${W[0]} in
             -u | --unset | -C | --chdir | -S | --split-string)
-              REASON="env ${W[0]} cannot be analysed"
+              REASON="env ${W[0]} cannot be analyzed"
               return 1
               ;;
           esac

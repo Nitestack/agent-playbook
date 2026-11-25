@@ -100,7 +100,7 @@ has_dotdot() {
 # ── Shell command parsing ──────────────────────────────────────────────
 #
 # parse_command <string> splits a shell command line into simple commands.
-# It honours quotes, escapes, separators (; & | newline and parentheses) and
+# It honors quotes, escapes, separators (; & | newline and parentheses) and
 # comments, which is enough to match on words without being fooled by quoted
 # text. It is a guard, not a shell: it refuses what it cannot follow, and
 # callers fail closed. Refused: command and process substitution ($( ),
@@ -272,9 +272,9 @@ GIT_SUB=""
 GIT_ARGS=()
 GIT_BAD=""
 
-# git_parse: analyse W (W[0] is git). Sets GIT_DIRS (the -C values in order),
+# git_parse: analyze W (W[0] is git). Sets GIT_DIRS (the -C values in order),
 # GIT_SUB, GIT_ARGS and GIT_BAD (non-empty when an option before the
-# subcommand cannot be analysed: `-c`, `--git-dir`, `--exec-path`, ...).
+# subcommand cannot be analyzed: `-c`, `--git-dir`, `--exec-path`, ...).
 git_parse() {
   local i=1 n=${#W[@]} w
   GIT_DIRS=()
@@ -294,7 +294,7 @@ git_parse() {
         ;;
       --no-pager | --no-optional-locks | -P) i=$((i + 1)) ;;
       -*)
-        GIT_BAD="git option $w before the subcommand cannot be analysed"
+        GIT_BAD="git option $w before the subcommand cannot be analyzed"
         return 0
         ;;
       *)

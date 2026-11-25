@@ -25,10 +25,10 @@
 #
 # While the entry has "draining": true, new dispatches (delegate_task,
 # invoke_subagent, create_threads, Agent/Task, t3_thread_launch) are denied.
-# The one exception is t3_thread_launch of the handoff successor, recognised by
+# The one exception is t3_thread_launch of the handoff successor, recognized by
 # the entry's "handoff_marker" string appearing verbatim in the call input.
 #
-# Not a defence against a determined adversary; it stops a well-meaning
+# Not a defense against a determined adversary; it stops a well-meaning
 # orchestrator from drifting into hands-on work.
 
 set -uo pipefail
@@ -96,7 +96,7 @@ gh_allowed() {
         ;;
       -*)
         if [ -z "$group" ]; then
-          REASON="gh option $w before the command cannot be analysed"
+          REASON="gh option $w before the command cannot be analyzed"
           return 1
         fi
         ;;

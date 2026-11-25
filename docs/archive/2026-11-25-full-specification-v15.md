@@ -2,7 +2,7 @@
 
 > **Historical Reference, frozen.** This is the sanitized snapshot of the v15 council dossier dated 2026-11-25. It records the reasoning and the complete hardened design that was considered. It is **not** current guidance. The living, portable blueprint is [`../universal-blueprint.md`](../universal-blueprint.md). The round-by-round decision log is [`2026-11-25-council-decisions-r1-r15.md`](2026-11-25-council-decisions-r1-r15.md).
 >
-> **Sanitized:** host names, local user paths, the operator's account name, private identifiers (device, ruleset and repository identifiers) and private repository internals were replaced with placeholders such as `<coordinator-host>`, `<worker-host-a>`, `<operator>`, `<owner>/<repo>`, `<project>`, `<trunk>` and `<crate-path>`. Issue numbers are shown as `#<n>`. The technical content is otherwise unchanged.
+> **Sanitized:** host names, local user paths, the operator's account name, reviewer model names (now Panel A and Panel B, as in the decision log), project non-goal IDs, private identifiers (device, ruleset and repository identifiers) and private repository internals were replaced with placeholders such as `<coordinator-host>`, `<worker-host-a>`, `<operator>`, `<owner>/<repo>`, `<project>`, `<trunk>` and `<crate-path>`. Issue numbers are shown as `#<n>`. The technical content is otherwise unchanged. Standard system paths of the reference deployment (for example `/run/current-system`, `/etc/systemd`, `/var/lib/orch`) are kept: they are generic system locations, not private identifiers.
 >
 > Do not read this file in full. Grep the section you need (`grep -n "^## " <file>`).
 
@@ -11,7 +11,7 @@
 # Complete Agentic Setup — Council Review Dossier (v15 — Final Unanimous Consensus Release)
 
 **Date:** 2026-11-25
-**Purpose:** Apply the single final precision fix from Council Round 14 (Opus 5.5 Medium: **DX 9.6 / AX 9.6 `CONSENSUS`** + 1 non-blocking nit; GPT-6.2 Sol High: **DX 9.3 / AX 8.9** — apply the per-call `PreToolUse` canonical-turn check & post-read/pre-write canary separately to BOTH Claude AND Codex, and state honestly that checks gate subsequent tool calls rather than revoking an already-authorized call).
+**Purpose:** Apply the single final precision fix from Council Round 14 (Panel A: **DX 9.6 / AX 9.6 `CONSENSUS`** + 1 non-blocking nit; Panel B: **DX 9.3 / AX 8.9** — apply the per-call `PreToolUse` canonical-turn check & post-read/pre-write canary separately to BOTH Claude AND Codex, and state honestly that checks gate subsequent tool calls rather than revoking an already-authorized call).
 
 > **Honesty Boundary & 3-Layer Scope:**
 > 1. **Universal Setup (any project — T3-Stack, Web, Rust, NixOS/Homelab):** Tier 0/1/2 blueprint (`bootstrap-repo`), shift-based orchestration (`orchestrate`), 28 collision-free global skills + repo-scoped stack skills, MD-only supply-chain filtering, serialized crash-durable anti-rollback `infra-switch`, and single-provider default (`#<n>`).
@@ -24,7 +24,7 @@
 
 ## 1. Trust Boundaries, Crash-Durable Anti-Rollback Infra Deploys & Unforgeable Owner Proof
 
-### 1.1 Dedicated OS Users, Static CI Template Unit & Exact-Pre/Post-Verified Bundle `infra-switch` (Closes Opus R14 Nit)
+### 1.1 Dedicated OS Users, Static CI Template Unit & Exact-Pre/Post-Verified Bundle `infra-switch` (Closes Panel A R14 Nit)
 - **Zero owner PAT in any agent shell on all 3 hosts (`<coordinator-host>`, `<worker-host-a>`, `<worker-host-b>`).**
 - **Zero GitHub push credentials and zero SSH access to `<coordinator-host>` on worker hosts (`<worker-host-a>`, `<worker-host-b>`):** Worker agents (`<operator>`) operate strictly locally (`git commit -S` with `agent@<host>`) and hold read-only GitHub access only. No lateral SSH access into `<coordinator-host>`. *(Separate system user `ci-attest` on `<worker-host-a>` holds only its scoped CI-App `checks:write` key — zero repo push access, inaccessible to `<operator>`.)*
 - **Coordinator (`<coordinator-host>`):** Holds only a scoped **Coordinator GitHub App token** (read repo/PR/checks, create/comment issues; **zero** push permission to any branch, **zero** PR-merge permission).
@@ -33,7 +33,7 @@
     1. `git-ro@<worker>`: `ForceCommand` restricted strictly to read-only `git-upload-pack` under `wt/*` (no shell, no writes).
     2. `receipt-ro@<worker-host-a>`: `ForceCommand` restricted strictly to reading validated JSON receipts (`^[a-z0-9._-]+\.json$`) under `/var/lib/ci/receipts/` (no shell, no writes).
 - **Explicit Same-User Boundary Honesty:**
-  - On `<coordinator-host>`, local `<operator>` processes share the single narrow `NOPASSWD` rule `sudo -u publisher /run/current-system/sw/bin/publish-broker`, and local T3 runs as `<operator>` (per NG-01/NG-04 — no custom user-switching launcher). Caller checks (`T3CODE_THREAD_ID`, `worker_thread_id`) and same-host worker isolation (`-C "$WT"` hook) are explicitly documented as **accident/drift/concurrency barriers**, NOT cryptographic authentication between two processes running as `<operator>`.
+  - On `<coordinator-host>`, local `<operator>` processes share the single narrow `NOPASSWD` rule `sudo -u publisher /run/current-system/sw/bin/publish-broker`, and local T3 runs as `<operator>` (per the project's non-goals: no own agent launcher, no own chat harness — no custom user-switching launcher). Caller checks (`T3CODE_THREAD_ID`, `worker_thread_id`) and same-host worker isolation (`-C "$WT"` hook) are explicitly documented as **accident/drift/concurrency barriers**, NOT cryptographic authentication between two processes running as `<operator>`.
   - The **actual cryptographic security boundaries** protecting `<trunk>` and gate-defining PRs are independent of caller identity: `publisher`'s evidence verification (verified commit signatures, full CI Check Run/receipt tuple + workflow hash, broker-launched single-turn review, GitHub Rulesets, and the unforgeable `owner@<project>` signature).
   - On `<coordinator-host>` and `<worker-host-a>`, `<operator>` has **no** general passwordless `sudo` (`wheel` `NOPASSWD: ALL` disabled). `<worker-host-b>` holds zero publisher/CI/ledger credentials or state.
 - **Root-Owned Static Template Unit for Local CI on `<worker-host-a>`:**
@@ -88,9 +88,9 @@
 
 ---
 
-## 2. Broker-Authenticated Run-Bound Reviews Across Both Claude & Codex (Closes Sol #<n>)
+## 2. Broker-Authenticated Run-Bound Reviews Across Both Claude & Codex (Closes Panel B #<n>)
 
-### 2.1 Secret 256-Bit Nonce + Per-Call `PreToolUse` Enforcement on BOTH Claude & Codex (Closes Sol #<n>)
+### 2.1 Secret 256-Bit Nonce + Per-Call `PreToolUse` Enforcement on BOTH Claude & Codex (Closes Panel B #<n>)
 - **Single ledger host:** `<coordinator-host>` (`/var/lib/orch/state/`, owned by `publisher`). Reviewers run strictly read-only and write **nothing**.
 - **Two exact, provable invariants enforced identically on BOTH Claude Code AND Codex CLI (honest about non-atomic sends & non-retroactive authorization):**
   - **(I1 — Per-call gating of subsequent tool calls on BOTH providers):** Before authorizing any tool call in any T3 scratch thread, the `PreToolUse` hook (deployed in `~/.claude/settings.json` for Claude AND `$CODEX_HOME/hooks.json` for Codex — both inherit `T3CODE_THREAD_ID`, verified in `ClaudeAdapterV2.ts:1733` & `CodexAdapterV2.ts:1744`) verifies BOTH `active-review-threads.json` AND the live thread/transcript state: authorizing ONLY when `user_message_count == 1` AND `sha256(first_user_message) == expected_brief_sha256` (embedding the secret 256-bit broker nonce) AND (where exposed) `active_run_id == canonical_run_id`. Any second user message accepted before the next tool authorization check immediately causes **every subsequent tool call — including an otherwise permitted snapshot read — to be denied fail-closed on both Claude and Codex** (this gates subsequent calls cleanly without claiming to retroactively revoke a tool call already authorized and in progress).
@@ -103,7 +103,7 @@
      - While unregistered (fail-closed hook denies all tools), broker calls `t3_thread_send(threadId: reviewer_thread_id, mode: "queue", clientRequestId: "review-send:<reservation_id>", message: <rendered_brief>)`, receiving T3's authoritative `canonical_run_id` and `canonical_message_id`.
      - Broker verifies via `t3_thread_read(view: "activity")` that `runCount == 1 && runId == canonical_run_id && messageId == canonical_message_id && sha256(first_user_message) == expected_brief_sha256` (otherwise immediately interrupts and discards).
      - Broker persists `{ reviewer_thread_id, canonical_run_id, canonical_message_id, expected_brief_sha256, snapshot_root }` via **`atomic_write_durable`** (`write → fsync(tmp) → rename → fsync(/var/lib/orch/state)`) into `active-review-threads.json`.
-  5. **Provider-specific read-only containment + shared I1 per-call turn check (`#<n>` — Closes Sol #<n>):**
+  5. **Provider-specific read-only containment + shared I1 per-call turn check (`#<n>` — Closes Panel B #<n>):**
      - **Claude reviewer (`~/.claude/settings.json` `PreToolUse` hook):** Enforces I1 per call (`T3CODE_THREAD_ID` registered, `user_message_count == 1`, `sha256(first_user_message) == expected_brief_sha256`, `active_run_id == canonical_run_id` when exposed); denies `Bash`, ALL write/edit tools, and ALL MCP tools; allows ONLY `Read`/`Grep`/`Glob` with canonicalized `realpath` under `/run/review-ro/<reservation_id>/` and rejects `..`/absolute patterns and symlink escapes.
      - **Codex reviewer (`$CODEX_HOME/hooks.json` `PreToolUse` hook + read-only no-network sandbox):** Runs in Codex's **OS read-only sandbox with network disabled** scoped to `/run/review-ro/<reservation_id>/` with zero GitHub tokens, **AND** enforces the **exact same I1 per-call `PreToolUse` hook** (checking `active-review-threads.json`, `user_message_count == 1`, `sha256(first_user_message) == expected_brief_sha256`, and rejecting any shell access outside canonicalized `/run/review-ro/<reservation_id>/` — so a second message accepted before the next tool authorization denies even an otherwise permitted snapshot read on Codex as well!).
 - **Correct Top-Level Interruption & Honest `pending_launch` Recovery:**
