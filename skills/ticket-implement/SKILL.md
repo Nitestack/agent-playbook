@@ -14,7 +14,7 @@ Use this for one atomic issue (`#N`), from pre-flight to a PR that is ready for 
 4. If an ambiguity affects scope, the data model, dependencies, credentials or a non-goal, stop and report `BLOCKED: <question and proposal>`. Small, reversible choices go under PR Assumptions.
 
 ## 2. Red-Green TDD and Isolation
-1. Implement every AC completely, and nothing beyond the Non-Goals. Reuse named helpers and standard libraries.
+1. Implement every AC completely and nothing beyond the ACs; never implement a Non-Goal. Reuse named helpers and standard libraries.
 2. For each behavioral AC, write or find a test that **fails without the change** (red), then make the smallest clean change that passes it (green).
 3. Never delete, skip, mark ignored or weaken an existing test.
 4. Keep tests and manual runs in throwaway temp directories and databases, with isolated git config. Never touch user data directories or global config.
@@ -26,7 +26,7 @@ Use this for one atomic issue (`#N`), from pre-flight to a PR that is ready for 
 
 ## 4. Commit, Push and Exact-SHA PR Handoff
 1. Make a few clean, **signed** Conventional Commits. Never use `--no-verify` or `--no-gpg-sign`. If you rebase onto `origin/<default>`, rerun the gate after the final rebase.
-2. Push the feature branch and open or update the PR against `<default>` with:
+2. **Tier 0 and 1:** push the feature branch. **Tier 2:** do not push; workers hold no push credentials. Hand the publisher the branch and the exact head SHA, and it pushes. Once the branch is on the remote, open or update the PR against `<default>` with:
    - `Closes #N`
    - the exact `base_oid` and `head_oid` (40-character SHAs)
    - evidence per AC: test names and observed behavior

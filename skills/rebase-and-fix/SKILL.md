@@ -37,13 +37,22 @@ Compare the old and new series with patch IDs in verbatim mode, and classify:
 2. **`MECHANICAL_CARRY_FORWARD`**: the rebase was clean **and** the base delta touches only documentation paths the project declares as docs-only.
 3. **`DELTA_RE_REVIEW`**: anything else. A fresh read-only reviewer checks the base delta `B` against the PR's interfaces.
 
-Green CI on the new head is required in **all three** outcomes.
+Green CI on the new head is required in **all three** outcomes. Each outcome also needs approval evidence for the new tuple `(pr, new_base_oid, new_head_oid)`, because `publish-pr` accepts nothing else:
+
+| Outcome | Approval evidence for the new tuple | Who produces it |
+|---|---|---|
+| `FULL_HEAD_RE_REVIEW` | a new `APPROVE` from a full `blind-review` of the new head | a fresh reviewer |
+| `DELTA_RE_REVIEW` | an `APPROVE` from a fresh reviewer who checked the base delta `B` against the PR's interfaces, naming the new tuple | a fresh reviewer |
+| `MECHANICAL_CARRY_FORWARD` | a carry-forward record: the old tuple and its `APPROVE`, the new tuple, the paired patch IDs and the list of base-delta paths | this worker writes it into the handoff; the publisher re-verifies every item itself |
+
+If any carry-forward item cannot be verified, the outcome is `FULL_HEAD_RE_REVIEW`.
 
 ## 5. Push and Hand Off
-1. Push with a lease on the old head, never a plain force: `git push --force-with-lease="refs/heads/<branch>:<old_head_oid>" origin <branch>`.
+1. **Tier 0 and 1:** push with a lease on the old head, never a plain force: `git push --force-with-lease="refs/heads/<branch>:<old_head_oid>" origin <branch>`.
+   **Tier 2:** workers hold no push credentials. Do not push; hand the publisher the branch, `new_head_oid` and `old_head_oid` so it pushes with that lease.
 2. Return a compact handoff:
    - **Tuple transition:** `old (base, head) -> new (base, head)`
-   - **Classification:** `FULL_HEAD_RE_REVIEW` | `MECHANICAL_CARRY_FORWARD` | `DELTA_RE_REVIEW`, with the reason
+   - **Classification:** `FULL_HEAD_RE_REVIEW` | `MECHANICAL_CARRY_FORWARD` | `DELTA_RE_REVIEW`, with the reason, and the carry-forward record when it applies
    - **Findings disposition:** `FIXED (<sha>)` or `NO-FIX (<reason>)` for each finding
    - **Gate result:** exit status on the exact new head.
 

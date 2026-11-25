@@ -26,6 +26,7 @@ Rebuild ground truth from external authorities, never from memory:
 - **Never** edit feature code or tests, debug failing tests over SSH, resolve conflicts by hand, or run build and test gates in the orchestrator's own turn.
 - **Never** block waiting for CI or a merge queue (no wait loops, no long foreground scripts). Stop the turn and let the wakeup do it.
 - Any PR that needs code fixes, a rebase, migration renumbering or a gate rerun goes to a worker with `rebase-and-fix` on the ticket's existing host.
+- Where the guards are used, the operator registers the first shift before it starts (`playbook-registry.sh coordinator add <thread-id>`), and every worker starts with `PLAYBOOK_WORKER_WORKTREE` and `PLAYBOOK_WORKER_BRANCH` set to its worktree and branch.
 
 ## 3. Parallelism Without Pre-Serialization
 - Fill every free worker slot immediately with ready, unblocked tickets, in dependency order. Respect the host caps the project declares; if none are declared, use the caps in section 7.
@@ -37,21 +38,22 @@ Rebuild ground truth from external authorities, never from memory:
 On every wakeup run this pass once, then end the turn:
 1. **Verify completions.** Read the terminal state of finished children. Never claim "done" or "green" without exact PR, branch and SHA evidence.
 2. **Advance PRs.**
-   - Green and complete: dispatch a fresh, read-only `blind-review` on the exact `(pr, base_oid, head_oid)`.
+   - Green and complete: build and register the review snapshot (`playbook-registry.sh review snapshot`, see `blind-review`), then dispatch a fresh, read-only `blind-review` on the exact `(pr, base_oid, head_oid)`. After the verdict, `playbook-registry.sh review remove` tears the snapshot down.
+   - Rebased by `rebase-and-fix`: route by its classification. `FULL_HEAD_RE_REVIEW` gets a new full review; `DELTA_RE_REVIEW` gets a review of the base delta on the new tuple; `MECHANICAL_CARRY_FORWARD` goes to `publish-pr` with the carry-forward record, which the publisher re-verifies.
    - `REQUEST_CHANGES` or `NEEDS_REBASE`: dispatch `rebase-and-fix` on the ticket's host. `NEEDS_REBASE` never blocks the rest of the queue.
-   - Approved, with required CI green on the exact head: hand off to `publish-pr` (fire and forget).
+   - Approval evidence for the exact tuple, with required CI green on the exact head: hand off to `publish-pr` (fire and forget).
 3. **Refill slots.** Count running implementers per host and dispatch the next ready ticket with `ticket-implement`.
 4. **Hygiene.** Settle finished child threads; run `safe-cleanup` only for PRs confirmed merged.
 5. **Stop the turn.** Children and async publish jobs run on their own.
 
 ## 5. Rotation: Drain, Cancel, Hand Off
-1. **Freeze.** Set `draining = true` in the shift's state. No new dispatches, except the successor launch described below.
-2. **Drain for at most 15 minutes.** Let active children finish. Then cancel what is left: `task_cancel` for delegates, `t3_thread_interrupt(stop: true)` for top-level threads. Bump the shift generation `G -> G+1`.
-3. **Anti-livelock.** Count cancellations in `rotation_cancel_count`. If it reaches `>= 2`, stop rotating and escalate to the owner with the list of live children. Do not cancel a third time.
-4. **Launch the successor** with `shift_generation = N+1` and a `handoff_marker` string in its prompt. The marker is what lets the one launch through while draining.
+1. **Freeze.** Run `playbook-registry.sh drain <handoff-marker>`. It sets `draining = true` on this shift's registry entry; from then on the coordinator guard refuses new dispatches, except the successor launch described below.
+2. **Drain for at most 15 minutes.** Let active children finish. Then cancel what is left with the host's cancel capability (in T3 Code: `task_cancel` for delegates, `t3_thread_interrupt(stop: true)` for top-level threads). Bump the shift generation `G -> G+1`.
+3. **Anti-livelock.** A rotation that had to cancel children increments `rotation_cancel_count` once, however many children it cancelled. When the count reaches 2, stop rotating and escalate to the owner with the list of live children. Never start a third such rotation.
+4. **Launch the successor** with `shift_generation = N+1` and the same `handoff_marker` string in its prompt. The marker is what lets the one launch through while draining.
 5. **Two-phase acknowledgement.** The old shift stays alive until the successor confirms:
-   - Phase 1: the successor reads the state (open issues, open PRs, child threads) and records `handoff_received`.
-   - Phase 2: the successor attaches PR watches, reads each watched PR, schedules a **20-minute heartbeat**, and sets `handoff_acked = true`.
+   - Phase 1: the successor registers itself (`playbook-registry.sh coordinator add <its-thread-id>`), reads the state (open issues, open PRs, child threads) and records `handoff_received`.
+   - Phase 2: the successor attaches PR watches, reads each watched PR, schedules a **20-minute heartbeat**, removes the predecessor's entry (`playbook-registry.sh coordinator remove <old-thread-id>`) and sets `handoff_acked = true`.
    Only then does the predecessor stop. If `handoff_acked` never arrives, the predecessor keeps the shift and escalates.
 
 ## 6. Universal Rules

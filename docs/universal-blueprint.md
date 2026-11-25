@@ -1,4 +1,4 @@
-# Universal Agentic Setup: Blueprint
+# agent-playbook: Blueprint
 
 This is the living architecture document for the agent playbook. It is portable: it names no hosts, accounts or private repositories. The rationale and the round-by-round history live in the [archive](archive/README.md), which is frozen and never loaded at runtime.
 
@@ -31,42 +31,44 @@ Stack-specific skills (a framework, a language's build tool, a deploy stack) liv
 - **Parallelism by default:** fill every free worker slot with ready work. Overlapping files are absorbed by isolated worktrees and by non-blocking `NEEDS_REBASE` routing (see `skills/rebase-and-fix`). Do not serialize dispatch in advance.
 - **Rotation triggers:** `compactions >= 2`, or `dispatches_in_shift >= 40`, or `shift_age >= 6h`, or milestone completion.
 - **Drain-or-cancel handoff:**
-  1. Freeze new dispatches (`draining = true`).
-  2. Wait up to 15 minutes for active children. Cancel what is left: `task_cancel` for delegated tasks, `t3_thread_interrupt(stop: true)` for top-level threads. Bump the shift generation.
-  3. If cancellations reach two, stop and escalate to the owner. Never cancel a third time.
-  4. Launch the successor. The old shift stays alive until the successor records receipt, attaches its watches, schedules a heartbeat and acknowledges.
+  1. Freeze new dispatches: the coordinator runs `playbook-registry.sh drain <handoff-marker>`, which sets `draining = true` on its own registry entry.
+  2. Wait up to 15 minutes for active children. Cancel what is left with the host's cancel capability (in T3 Code: `task_cancel` for delegated tasks, `t3_thread_interrupt(stop: true)` for top-level threads). Bump the shift generation.
+  3. A rotation that had to cancel children counts once, however many it cancelled. After the second such rotation, stop and escalate to the owner. Never start a third.
+  4. Launch the successor with the marker in its prompt. The successor registers itself and removes its predecessor's entry. The old shift stays alive until the successor records receipt, attaches its watches, schedules a heartbeat and acknowledges.
 
 ### Pre-tool guards
 
-The guards are `PreToolUse` hooks. Each one is inert unless its thread is registered, so they are safe to register globally.
+The guards are `PreToolUse` hooks for Claude Code and Codex. Each one does nothing until it is activated for a thread, so they are safe to register globally. The coordinator and reviewer guards are active when the thread id (`PLAYBOOK_THREAD_ID`, else T3 Code's `T3CODE_THREAD_ID`) is listed in their registry; `playbook-registry.sh` writes those registries. The worker guard is active when `PLAYBOOK_WORKER_WORKTREE` is set. The README shows the setup.
 
 | Role | Allows | Denies |
 |---|---|---|
-| **Coordinator** | Read tools, read-only git and `gh`, `gh issue` create and comment, GET-only `gh api`, the publish broker, orchestration tools | Repo writes, builds, tests, mutating git, merges, new dispatches while draining |
-| **Worker** | Writes only inside its own worktree (`git -C "$WT"`), pushes only to its feature branch | Writes outside the worktree, pushes to protected branches |
-| **Reviewer** | Read, Grep and Glob inside the review snapshot | Bash, every write tool, MCP tools, web access, sub-agents, paths that escape the snapshot |
+| **Coordinator** | Read tools, read-only git and `gh`, `gh issue` create and comment, GET-only `gh api`, the publish broker, `playbook-registry.sh` (except removing itself), orchestration tools | Repo writes, builds, tests, mutating git, merges (CLI and forge tools), wait loops, new dispatches while draining |
+| **Worker** | Writes only inside its own worktree (`git -C "$WT"`); pushes only to `PLAYBOOK_WORKER_BRANCH` when set | Writes outside the worktree, pushes to protected branches (`PLAYBOOK_PROTECTED_BRANCHES`, default `main master develop`) |
+| **Reviewer** | Claude Code's Read, Grep and Glob inside the review snapshot | Bash, every write tool, MCP tools, web access, sub-agents, paths that escape the snapshot |
 
-Guards need only `bash`, `jq` and coreutils. They stop a well-meaning agent from drifting. They are not defenses against a determined adversary; the hard boundaries are the credential and publishing boundaries in Tier 2.
+A Codex reviewer reads through its shell, which the reviewer guard denies; run it in Codex's read-only sandbox with the snapshot as its working directory instead of registering it.
+
+Guards need bash 4 or newer, `jq`, `git` and GNU coreutils. They stop a well-meaning agent from drifting. They are not defenses against a determined adversary; the hard boundaries are the credential and publishing boundaries in Tier 2.
 
 ## 3. Independent review
 
 - **Context, not vendor:** an independent reviewer starts with a fresh context, has read-only tools, and reads only an exact snapshot. The same provider as the author is enough.
-- **Snapshot:** export the exact head tree with no `.git` directory, write the diff against the base into the snapshot, and make the snapshot read-only.
-- **Exact tuple:** a verdict counts only for the `(PR, base, head)` it names. A new head needs a new review.
+- **Snapshot:** export every tracked file of the exact head with no `.git` directory and no export attributes applied, put the diff against the base next to that tree (never inside it), and make the snapshot read-only. See `skills/blind-review`.
+- **Exact tuple:** a verdict counts only for the `(PR, base, head)` it names. A new head needs new approval evidence: a new review, or, after a rebase, the evidence its classification defines (section 4).
 - **Defects only:** the reviewer reports numbered defects with severity, file, impact and minimal fix. It skips style.
 
 ## 4. Publishing (Tier 2)
 
-- **No push credentials on workers.** Workers commit locally and read from the remote. A single publisher identity, serialized by one lock, performs every push.
+- **No push credentials on workers.** Workers commit locally and read from the remote. They hand the publisher the branch, the new head and the expected old remote head; a single publisher identity, serialized by one lock, performs every push, feature branches included.
 - **Exact-SHA compare-and-swap:** publish only with a lease on the expected base. Never rebase during publish. If the base moved, route the PR to `rebase-and-fix`.
-- **Rebase classifier:** after a rebase, classify the change as `FULL_HEAD_RE_REVIEW` (conflict, content change, base touches the PR, or a policy path), `MECHANICAL_CARRY_FORWARD` (clean, and the base delta touches only documentation), or `DELTA_RE_REVIEW` (anything else). Green CI on the new head is required in all three.
+- **Rebase classifier:** after a rebase, classify the change as `FULL_HEAD_RE_REVIEW` (conflict, content change, base touches the PR, or a policy path), `MECHANICAL_CARRY_FORWARD` (clean, and the base delta touches only documentation), or `DELTA_RE_REVIEW` (anything else). Green CI on the new head is required in all three. Each outcome has its approval evidence for the new tuple: a full `APPROVE` (`FULL_HEAD_RE_REVIEW`), an `APPROVE` of the base delta that names the new tuple (`DELTA_RE_REVIEW`), or a carry-forward record that the publisher re-verifies itself (`MECHANICAL_CARRY_FORWARD`; see `skills/rebase-and-fix`). When the publisher cannot verify a carry-forward, it requires a full review.
 - **Owner gate:** changes to CI, build, lint, ignore, lockfile, toolchain or agent-instruction files need the owner's signed approval on the exact head.
 - **Verified patch equivalence:** compare patches with `git patch-id --verbatim`, never `--stable`.
 
 ## 5. Host admission and containment
 
 - **Caps:** derive per-host concurrent job caps from core count and memory. The coordinator host runs no heavy builds.
-- **Hysteresis:** pause new heavy jobs above the high threshold and resume below the low threshold. Use at least memory use, pressure stall information where available, and free disk.
+- **Hysteresis:** pause new heavy jobs when memory use or pressure stall information (where available) rises above the high threshold, or free disk falls below its floor; resume once they are back past the low threshold.
 - **Out-of-memory:** run a user-slice out-of-memory daemon with the pressure-kill policy on worker hosts.
 - **Credential separation:** no owner token in any agent shell. No agent has general passwordless `sudo`.
 

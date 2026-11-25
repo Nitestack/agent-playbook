@@ -15,6 +15,8 @@ Require all of these as full 40-character lowercase OIDs and names:
 Never accept a mutable ref (`HEAD`, a bare branch name) as a publish input.
 
 ## 2. Use the Project Publisher
+Only the publisher runs this skill and pushes. At Tier 2 that is the one publisher identity; workers hand it their branch and SHAs and never push themselves. At Tier 1 it is a dedicated publish run, or the operator, never a guarded worker: the worker guard refuses pushes to protected branches.
+
 If the project provides an audited publish script or broker, call it with the validated tuple and read its exit code and log. Never bypass it. Never use the forge's "Rebase and merge" button, because it creates new, unreviewed commit SHAs.
 
 ## 3. Pre-Push Invariants (Fail Closed)
@@ -25,7 +27,7 @@ Stop at the first failed check:
 4. **Base moved?** If the live default branch has moved past `expected_base_oid`, **do not rebase here**. Release the publish lock and route the PR as `NEEDS_REBASE` (section 5).
 5. **Signatures.** Every commit in `expected_base_oid..expected_head_oid` passes `git verify-commit`.
 6. **Gate provenance.** Run `git diff --no-renames --name-only -z <base> <head>`. If any CI, gate, policy, lint, ignore, lockfile or toolchain file changed, require the project's gate-owner approval on the exact `expected_head_oid`.
-7. **Independent review.** A current `APPROVE` exists for the exact `(pr, expected_base_oid, expected_head_oid)`. Reviews on other heads do not count.
+7. **Independent review.** Approval evidence exists for the exact `(pr, expected_base_oid, expected_head_oid)`: a current `APPROVE` for that tuple, or, after a rebase classified `MECHANICAL_CARRY_FORWARD`, a carry-forward record (`rebase-and-fix` section 4). Re-verify a carry-forward yourself: the old tuple has an `APPROVE`, the paired `git patch-id --verbatim` values are equal, the base delta touches only declared docs-only paths, and no gate-defining path changed. If any check fails, the PR needs a full review. Reviews and records for other tuples do not count.
 8. **Authoritative CI.** The required checks are `success` on the exact `expected_head_oid`.
 
 ## 4. Equivalence After a Rebase

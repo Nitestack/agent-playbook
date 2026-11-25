@@ -9,7 +9,7 @@ Use this for high-impact proposals, architecture shifts, security boundaries and
 
 ## 1. Independent Panel
 1. Act as the critical judge. Never a passive secretary.
-2. Spawn reviewers with fresh, read-only context. **Single-provider default:** every reviewer can come from the one provider the project already uses. Cross-family reviewers are opt-in: use them only when the project has configured a second provider. A project with one subscription must still get a full council.
+2. Spawn reviewers with fresh context and read-only access to the artifact. **Single-provider default:** every reviewer can come from the one provider the project already uses. Cross-family reviewers are opt-in: use them only when the project has configured a second provider. A project with one subscription must still get a full council.
 3. Give each reviewer only:
    - the goal, the hard constraints and the non-goals,
    - the exact diff or draft document, and the repository context it needs,
@@ -19,9 +19,9 @@ Use this for high-impact proposals, architecture shifts, security boundaries and
 ## 1a. Shared Temporary Board (All-to-All Discussion)
 A council is a discussion, not parallel monologues: every reviewer reads and answers every other reviewer.
 1. Create a temporary board directory outside the repository (`board=$(mktemp -d)`). Put one `BRIEF.md` there: goal, constraints, non-goals, artifact paths, rubric, member names and the round protocol. Nothing else.
-2. Give every reviewer the board path and its own name. Each reviewer writes only its own files; the artifact under review stays read-only.
+2. Give every reviewer the board path and its own name. Each reviewer writes only its own round files on the board; the artifact under review stays read-only to everyone.
 3. Rounds:
-   - **R1, blind:** each reviewer writes `r1-<name>.md` without reading the board.
+   - **R1, blind:** each reviewer reads only `BRIEF.md` and the artifact, never another member's files, and writes `r1-<name>.md`.
    - **R2, discussion:** each reviewer reads all `r1-*.md`, verifies the others' findings against the artifact and writes `r2-<name>.md`: agree / disagree with a reason / refine, new findings, and questions addressed to members by name (`@name: …`).
    - **R3, consensus:** each reviewer reads all `r2-*.md`, answers the questions addressed to it and writes `r3-<name>.md` with its endorsed findings (deduplicated, with severity) and its final verdict.
 4. The judge triages the R3 files with section 2 below, writes the council summary, then deletes the board. Keep only the summary.

@@ -5,7 +5,8 @@ This repo is a portable kit consumed by other repos. Keep it small, plain and pu
 ## Commands (run before every commit)
 
 - Hook tests: `bash hooks/tests/test-hooks.sh`. It must end with `0 failed`.
-- Skill lint: run the `Skill lint` step of `.github/workflows/ci.yml` locally, with the same bash. It checks that `skills/` holds only Markdown, that each `SKILL.md` has a frontmatter `name:` equal to its directory and a `description:`, and that names are unique.
+- Shell lint: `shellcheck -x -P SCRIPTDIR -S warning hooks/*.sh hooks/tests/*.sh`.
+- Skill lint: run the `Skill lint` step of `.github/workflows/ci.yml` locally, with the same bash. It checks that `skills/` holds only regular Markdown files in the allowed places, that each `SKILL.md` has closed frontmatter with a `name:` equal to its directory and a `description:`, that names are unique, and that every `references/` file a skill names exists.
 - Workflow lint: `actionlint .github/workflows/ci.yml` when `actionlint` is available. Do not skip it silently.
 
 ## Public-ready privacy rule
@@ -31,7 +32,7 @@ This repo is a portable kit consumed by other repos. Keep it small, plain and pu
 
 - Every guard exits `0` before it reads input when it is not active for the session.
 - Every new rule gets a case in `hooks/tests/test-hooks.sh`. Never delete, skip or weaken a case.
-- Guards need only `bash`, `jq` and coreutils. Do not add a dependency for a guard.
+- Guards need only bash 4 or newer, `jq`, `git` and GNU coreutils. Do not add a dependency for a guard.
 
 ## Commits
 
