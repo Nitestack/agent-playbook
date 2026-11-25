@@ -51,7 +51,7 @@
       </ul>
       <div class="btn-row" data-enter-item>
         <a class="btn btn--primary" href="#adopt">Adopt it in a repo</a>
-        <a class="btn btn--secondary" href="../docs/universal-blueprint.md">Read the blueprint</a>
+        <a class="btn btn--secondary" href="https://github.com/Nitestack/agent-playbook/blob/main/docs/universal-blueprint.md">Read the blueprint</a>
       </div>
     </div>
 
@@ -262,22 +262,22 @@ test-hooks: 266 passed, 0 failed</pre>
     <p class="lead measure">Four skills. Each folder holds one <code>SKILL.md</code>; the link opens the file.</p>
     <div class="cards cards--4">
       <article class="card card--link">
-        <h3><a href="../skills/orchestrate/SKILL.md">orchestrate</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/orchestrate/SKILL.md">orchestrate</a></h3>
         <p>Run or take over an orchestrator shift for one milestone slice: split work, dispatch workers and reviewers, merge. No hands-on coding.</p>
         <p class="use"><strong>Use when</strong> starting an orchestrator thread, taking over a rotated shift, or a shift hits a rotation trigger.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/ticket-implement/SKILL.md">ticket-implement</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/ticket-implement/SKILL.md">ticket-implement</a></h3>
         <p>Implement one GitHub issue end to end in an isolated worktree: red-green TDD, foreground gate runs, signed linear commits, an exact-SHA PR.</p>
         <p class="use"><strong>Use when</strong> the task is a single issue number, from pre-flight to pull request.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/bootstrap-repo/SKILL.md">bootstrap-repo</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/bootstrap-repo/SKILL.md">bootstrap-repo</a></h3>
         <p>Set up agent rails in a new or existing repository, tier by tier, and add repo-scoped stack skills.</p>
         <p class="use"><strong>Use when</strong> equipping a repo for agents, adding <code>AGENTS.md</code> or <code>CLAUDE.md</code>, or adding project skills.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/rebase-and-fix/SKILL.md">rebase-and-fix</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/rebase-and-fix/SKILL.md">rebase-and-fix</a></h3>
         <p>Apply review fixes, resolve conflicts, renumber migrations and rebase onto a moved default branch. Then classify the change as <code>FULL_HEAD_RE_REVIEW</code>, <code>MECHANICAL_CARRY_FORWARD</code> or <code>DELTA_RE_REVIEW</code>.</p>
         <p class="use"><strong>Use when</strong> a PR is <code>REQUEST_CHANGES</code>, reports <code>NEEDS_REBASE</code>, or conflicts with a moved base.</p>
       </article>
@@ -292,32 +292,32 @@ test-hooks: 266 passed, 0 failed</pre>
     <p class="lead measure">Six skills, from the reviewer's verdict to the disk.</p>
     <div class="cards cards--2">
       <article class="card card--link">
-        <h3><a href="../skills/blind-review/SKILL.md">blind-review</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/blind-review/SKILL.md">blind-review</a></h3>
         <p>An anti-anchored review of one exact (PR, base, head) tuple, from a fresh read-only context over a snapshot with no <code>.git</code> directory.</p>
         <p class="use"><strong>Use when</strong> a PR is green and needs a verdict, or a re-review must confirm a new head.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/council-review/SKILL.md">council-review</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/council-review/SKILL.md">council-review</a></h3>
         <p>A council of cold, independent reviewers that discusses on a shared temporary board (blind round, then all-to-all replies, then consensus) and converges with evidence, for high-impact decisions.</p>
         <p class="use"><strong>Use when</strong> an architecture, security boundary, policy or proposal change needs it. Not for routine PRs.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/browser-verify/SKILL.md">browser-verify</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/browser-verify/SKILL.md">browser-verify</a></h3>
         <p>Verify a UI change in a real browser against the exact candidate build: routes, console errors, network failures, focus and empty states.</p>
         <p class="use"><strong>Use when</strong> a task changes web UI, layout, routing or client-side API behavior.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/publish-pr/SKILL.md">publish-pr</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/publish-pr/SKILL.md">publish-pr</a></h3>
         <p>Land one approved, green PR on the protected default branch by an exact-SHA compare-and-swap fast-forward. Then confirm it is <code>MERGED</code> and clean up.</p>
         <p class="use"><strong>Use when</strong> a PR is approved and green, or a publish stopped because the default branch moved.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/safe-cleanup/SKILL.md">safe-cleanup</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/safe-cleanup/SKILL.md">safe-cleanup</a></h3>
         <p>Inventory and remove stale worktrees, merged branches and build caches. Sized and confirmed first; unmerged, dirty and live work is never touched.</p>
         <p class="use"><strong>Use when</strong> disk space is low, worktrees pile up, or merged branches need removing.</p>
       </article>
       <article class="card card--link">
-        <h3><a href="../skills/session-miner/SKILL.md">session-miner</a></h3>
+        <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/session-miner/SKILL.md">session-miner</a></h3>
         <p>Mine session transcripts, CI failures and review rounds for recurring friction, cluster the root causes and turn each into a mechanical fix.</p>
         <p class="use"><strong>Use when</strong> a milestone or a multi-ticket run is over, or the same failure keeps coming back.</p>
       </article>
@@ -470,10 +470,10 @@ done</code></pre>
       <div>
         <h3>The archive files</h3>
         <ul class="files">
-          <li><a href="../docs/archive/2026-11-25-research-evidence.md">Research evidence</a>: nine findings, one section each, with the tool version where one was recorded.</li>
-          <li><a href="../docs/archive/2026-11-25-council-decisions-r1-r15.md">Council decisions R1 to R15</a>: the scores, what each round changed, and what was kept and trimmed.</li>
-          <li><a href="../docs/archive/2026-11-25-full-specification-v15.md">Full specification v15</a>: a sanitized snapshot of the complete hardened design, including the optional local-CI fallback. Historical: the blueprint holds the current guidance.</li>
-          <li><a href="../docs/archive/README.md">Archive index</a>: which claim lives in which section, and which versions were re-run.</li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-research-evidence.md">Research evidence</a>: nine findings, one section each, with the tool version where one was recorded.</li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-council-decisions-r1-r15.md">Council decisions R1 to R15</a>: the scores, what each round changed, and what was kept and trimmed.</li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-full-specification-v15.md">Full specification v15</a>: a sanitized snapshot of the complete hardened design, including the optional local-CI fallback. Historical: the blueprint holds the current guidance.</li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/README.md">Archive index</a>: which claim lives in which section, and which versions were re-run.</li>
         </ul>
       </div>
     </div>
@@ -532,18 +532,18 @@ done</code></pre>
       <nav aria-label="Repository files">
         <p class="label">Read in the repo</p>
         <ul>
-          <li><a href="../README.md">README</a></li>
-          <li><a href="../docs/universal-blueprint.md">Blueprint</a></li>
-          <li><a href="../AGENTS.md">AGENTS.md</a></li>
-          <li><a href="../.github/workflows/ci.yml">CI workflow</a></li>
-          <li><a href="../LICENSE">License (Apache-2.0)</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/universal-blueprint.md">Blueprint</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/AGENTS.md">AGENTS.md</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/.github/workflows/ci.yml">CI workflow</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/LICENSE">License (Apache-2.0)</a></li>
         </ul>
       </nav>
       <nav aria-label="Archive">
         <p class="label">Archive</p>
         <ul>
-          <li><a href="../docs/archive/README.md">Archive index</a></li>
-          <li><a href="../docs/archive/2026-11-25-council-decisions-r1-r15.md">Decisions R1 to R15</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/README.md">Archive index</a></li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-council-decisions-r1-r15.md">Decisions R1 to R15</a></li>
         </ul>
       </nav>
     </div>
