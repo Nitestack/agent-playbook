@@ -14,7 +14,22 @@ Use this for high-impact proposals, architecture shifts, security boundaries and
    - the goal, the hard constraints and the non-goals,
    - the exact diff or draft document, and the repository context it needs,
    - a rubric: `CRITICAL` / `HIGH` / `MEDIUM` findings, each with a concrete failure scenario, a missing proof or a contradiction, plus an explicit `CONSENSUS` or `REVISE` verdict.
-4. In round 1 keep reviewers blind to each other's output, to avoid groupthink.
+4. Run the panel as a discussion on a shared temporary board (section 1a). In round 1 keep reviewers blind to each other's output, to avoid groupthink.
+
+## 1a. Shared Temporary Board (All-to-All Discussion)
+A council is a discussion, not parallel monologues: every reviewer reads and answers every other reviewer.
+1. Create a temporary board directory outside the repository (`board=$(mktemp -d)`). Put one `BRIEF.md` there: goal, constraints, non-goals, artifact paths, rubric, member names and the round protocol. Nothing else.
+2. Give every reviewer the board path and its own name. Each reviewer writes only its own files; the artifact under review stays read-only.
+3. Rounds:
+   - **R1, blind:** each reviewer writes `r1-<name>.md` without reading the board.
+   - **R2, discussion:** each reviewer reads all `r1-*.md`, verifies the others' findings against the artifact and writes `r2-<name>.md`: agree / disagree with a reason / refine, new findings, and questions addressed to members by name (`@name: …`).
+   - **R3, consensus:** each reviewer reads all `r2-*.md`, answers the questions addressed to it and writes `r3-<name>.md` with its endorsed findings (deduplicated, with severity) and its final verdict.
+4. The judge triages the R3 files with section 2 below, writes the council summary, then deletes the board. Keep only the summary.
+
+## 1b. Independence: Give as Little Context as Possible
+- Start every reviewer cold: no orchestrator transcript, no earlier conclusions, no hint of what the judge expects or prefers, no author self-assessment.
+- The brief names what to check, not what to find. Let reviewers read the artifact themselves instead of summarising it for them.
+- Different model families are welcome when configured, but independence comes from cold, read-only contexts first.
 
 ## 2. Evidence-Based Triage (Anti-Sycophancy)
 - Never adopt a finding just because a reviewer raised it.
