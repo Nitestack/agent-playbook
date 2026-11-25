@@ -33,7 +33,7 @@ Add the playbook as a non-flake input. It is a plain source tree.
 ```nix
 {
   inputs.agent-playbook = {
-    url = "github:<owner>/agent-playbook";
+    url = "github:Nitestack/agent-playbook";
     flake = false;
   };
 
