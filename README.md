@@ -2,6 +2,10 @@
 
 A portable kit for agent-driven development: workflow skills, repo bootstrap templates, `PreToolUse` guard hooks, and an architecture archive. It is plain files. Nix is optional.
 
+## Overview page
+
+A visual overview of the whole repository (structure, tiers, the shift workflow, every skill, guard hooks, setup, the R1 to R15 archive and how to adopt it) is in [`site/index.html`](site/index.html). Open it in a browser. It is one self-contained page: no fonts, scripts or images are loaded from elsewhere.
+
 ## What is inside
 
 | Path | Contents |
