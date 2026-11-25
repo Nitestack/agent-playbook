@@ -117,6 +117,16 @@ patch_call() {
   jq -cn --arg p "$1" '{tool_name: "apply_patch", tool_input: {input: $p}}'
 }
 
+# cwd_call <tool> <input-json> <cwd>: a tool call whose hook input names the session cwd.
+cwd_call() {
+  jq -cn --arg t "$1" --argjson i "$2" --arg d "$3" '{tool_name: $t, tool_input: $i, cwd: $d}'
+}
+
+# codex_call <cmd-json-array> <workdir>: a Codex exec_command call.
+codex_call() {
+  jq -cn --argjson c "$1" --arg d "$2" '{tool_name: "exec_command", tool_input: {cmd: $c, workdir: $d}}'
+}
+
 COORD=coordinator-guard.sh
 WORKER=worker-guard.sh
 REVIEWER=reviewer-guard.sh
@@ -126,7 +136,7 @@ WORKER_MAIN_ENV=(PLAYBOOK_WORKER_WORKTREE="$wt_main")
 REVIEW_ENV=(PLAYBOOK_REVIEW_REGISTRY="$tmp/reviewers.json" T3CODE_THREAD_ID=rev-1)
 
 # ── Syntax ─────────────────────────────────────────────────────────────
-for script in guard-lib.sh "$COORD" "$WORKER" "$REVIEWER" tests/test-hooks.sh; do
+for script in guard-lib.sh "$COORD" "$WORKER" "$REVIEWER" playbook-registry.sh tests/test-hooks.sh; do
   if bash -n "$hooks/$script" 2>"$tmp/syntax"; then
     pass=$((pass + 1))
   else
@@ -280,8 +290,8 @@ expect_allow "reviewer: missing registry passes through" "$REVIEWER" \
 
 expect_allow "reviewer: Read of a snapshot file" "$REVIEWER" \
   "$(tool_call Read "{\"file_path\":\"$snap/a.md\"}")" "${REVIEW_ENV[@]}"
-expect_allow "reviewer: Read with a relative path" "$REVIEWER" \
-  "$(tool_call Read '{"file_path":"sub/b.md"}')" "${REVIEW_ENV[@]}"
+expect_allow "reviewer: relative Read from a cwd inside the snapshot" "$REVIEWER" \
+  "$(cwd_call Read '{"file_path":"sub/b.md"}' "$snap")" "${REVIEW_ENV[@]}"
 expect_allow "reviewer: Grep inside snapshot" "$REVIEWER" \
   "$(tool_call Grep "{\"pattern\":\"x\",\"path\":\"$snap\"}")" "${REVIEW_ENV[@]}"
 expect_allow "reviewer: Glob inside snapshot" "$REVIEWER" \
@@ -295,7 +305,7 @@ expect_deny "reviewer: Read with dot-dot after the root" "$REVIEWER" \
 expect_deny "reviewer: Read through an escaping symlink" "$REVIEWER" \
   "$(tool_call Read "{\"file_path\":\"$snap/leak/secret.txt\"}")" "${REVIEW_ENV[@]}"
 expect_deny "reviewer: relative path through an escaping symlink" "$REVIEWER" \
-  "$(tool_call Read '{"file_path":"leak/secret.txt"}')" "${REVIEW_ENV[@]}"
+  "$(cwd_call Read '{"file_path":"leak/secret.txt"}' "$snap")" "${REVIEW_ENV[@]}"
 expect_deny "reviewer: Read of the symlink itself" "$REVIEWER" \
   "$(tool_call Read "{\"file_path\":\"$snap/leak\"}")" "${REVIEW_ENV[@]}"
 expect_deny "reviewer: Read without a path" "$REVIEWER" "$(tool_call Read '{}')" "${REVIEW_ENV[@]}"
@@ -327,6 +337,140 @@ expect_deny "reviewer: entry without snapshot_root refuses every tool" "$REVIEWE
   "$(tool_call Read "{\"file_path\":\"$snap/a.md\"}")" PLAYBOOK_REVIEW_REGISTRY="$tmp/reviewers.json" T3CODE_THREAD_ID=rev-nosnap
 expect_deny "reviewer: snapshot_root that does not exist refuses every tool" "$REVIEWER" \
   "$(tool_call Read "{\"file_path\":\"$snap/a.md\"}")" PLAYBOOK_REVIEW_REGISTRY="$tmp/reviewers.json" T3CODE_THREAD_ID=rev-missing
+
+# ── Council fixes ──────────────────────────────────────────────────────
+# Thread identity: PLAYBOOK_THREAD_ID activates the guards outside T3 Code.
+expect_deny "coord: PLAYBOOK_THREAD_ID activates the guard" "$COORD" \
+  "$(tool_call Edit '{"file_path":"/x"}')" PLAYBOOK_COORDINATOR_REGISTRY="$tmp/coordinators.json" PLAYBOOK_THREAD_ID=coord-1
+expect_deny "reviewer: PLAYBOOK_THREAD_ID activates the guard" "$REVIEWER" \
+  "$(bash_call 'ls')" PLAYBOOK_REVIEW_REGISTRY="$tmp/reviewers.json" PLAYBOOK_THREAD_ID=rev-1
+expect_allow "coord: PLAYBOOK_THREAD_ID wins over T3CODE_THREAD_ID" "$COORD" \
+  "$(tool_call Edit '{"file_path":"/x"}')" PLAYBOOK_COORDINATOR_REGISTRY="$tmp/coordinators.json" \
+  PLAYBOOK_THREAD_ID=someone-else T3CODE_THREAD_ID=coord-1
+
+# Coordinator: forge merges, wait loops and program-running git options.
+for t in mcp__t3-code__pull_request_merge mcp__github__merge_pull_request mcp__github__push_files \
+  mcp__github__create_or_update_file mcp__github__update_pull_request_branch; do
+  expect_deny "coord: forge tool $t is denied" "$COORD" "$(tool_call "$t" '{"number":1}')" "${COORD_ENV[@]}"
+done
+expect_allow "coord: forge read tools pass" "$COORD" \
+  "$(tool_call mcp__t3-code__pull_request_read '{"number":1}')" "${COORD_ENV[@]}"
+for c in 'gh pr checks 12 --watch' 'git ls-remote --upload-pack=touch origin' 'git ls-remote --exec=x origin' \
+  'git diff --ext-diff'; do
+  expect_deny "coord: denied: $c" "$COORD" "$(bash_call "$c")" "${COORD_ENV[@]}"
+done
+for c in 'gh pr checks 12' 'git branch --merged main' 'git branch --contains abc123' 'git branch -r --no-merged origin/main' \
+  'git branch --points-at HEAD'; do
+  expect_allow "coord: allowed: $c" "$COORD" "$(bash_call "$c")" "${COORD_ENV[@]}"
+done
+expect_deny "coord: git branch creating a branch" "$COORD" "$(bash_call 'git branch newbranch')" "${COORD_ENV[@]}"
+
+# Coordinator: playbook-registry, and the drain flow end to end.
+reg=$tmp/drain-registry.json
+reviews_reg=$tmp/drain-reviews.json
+regenv=(PLAYBOOK_COORDINATOR_REGISTRY="$reg" PLAYBOOK_REVIEW_REGISTRY="$reviews_reg")
+check() {
+  local name=$1
+  shift
+  if "$@" >/dev/null 2>"$tmp/check-err"; then
+    pass=$((pass + 1))
+  else
+    fail=$((fail + 1))
+    echo "FAIL: $name -- $(cat "$tmp/check-err")"
+  fi
+}
+registry() {
+  env -i PATH="$PATH" HOME="$home" "${regenv[@]}" "$@"
+}
+check "registry: operator registers a coordinator" registry bash "$hooks/playbook-registry.sh" coordinator add shift-1
+for c in 'playbook-registry.sh drain HANDOFF-7' "$hooks/playbook-registry.sh review add rev-9 $snap" \
+  'playbook-registry.sh review remove rev-9' 'playbook-registry.sh coordinator add shift-2' \
+  'playbook-registry.sh coordinator remove shift-0' 'playbook-registry.sh show coordinator'; do
+  expect_allow "coord: registry command allowed: $c" "$COORD" "$(bash_call "$c")" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+done
+for c in 'playbook-registry.sh coordinator remove shift-1' 'playbook-registry.sh wipe' \
+  "$hooks/playbook-registry.sh coordinator remove shift-1"; do
+  expect_deny "coord: registry command denied: $c" "$COORD" "$(bash_call "$c")" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+done
+expect_allow "drain: a live coordinator may dispatch" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+check "drain: the coordinator drains itself" registry T3CODE_THREAD_ID=shift-1 bash "$hooks/playbook-registry.sh" drain HANDOFF-7
+check "drain: the registry records the marker" jq -e '.["shift-1"] | .draining == true and .handoff_marker == "HANDOFF-7"' "$reg"
+expect_deny "drain: a dispatch is now frozen" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+expect_deny "drain: a launch without the marker is frozen" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_launch '{"prompt":"new work"}')" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+expect_allow "drain: the successor launch with the marker passes" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_launch '{"prompt":"take over, HANDOFF-7"}')" "${regenv[@]}" T3CODE_THREAD_ID=shift-1
+check "drain: the successor registers itself" registry bash "$hooks/playbook-registry.sh" coordinator add shift-2
+check "drain: the successor removes its predecessor" registry bash "$hooks/playbook-registry.sh" coordinator remove shift-1
+check "drain: only the successor is left" jq -e 'keys == ["shift-2"]' "$reg"
+if registry bash "$hooks/playbook-registry.sh" drain X >/dev/null 2>&1; then
+  fail=$((fail + 1))
+  echo "FAIL: registry: drain without a thread id must fail"
+else
+  pass=$((pass + 1))
+fi
+check "registry: a review entry stores the resolved snapshot" registry bash "$hooks/playbook-registry.sh" review add rev-9 "$snap"
+check "registry: review entry content" jq -e --arg s "$snap" '.["rev-9"].snapshot_root == $s' "$reviews_reg"
+expect_deny "registry: the registered reviewer is confined" "$REVIEWER" "$(bash_call 'ls')" "${regenv[@]}" T3CODE_THREAD_ID=rev-9
+
+# Worker: the working directory of the call decides relative paths.
+expect_deny "worker: Codex workdir outside the worktree" "$WORKER" \
+  "$(codex_call '["bash","-lc","rm -rf x"]' "$out")" "${WORKER_ENV[@]}"
+expect_allow "worker: Codex workdir inside the worktree" "$WORKER" \
+  "$(codex_call '["bash","-lc","rm -rf target"]' "$wt")" "${WORKER_ENV[@]}"
+expect_allow "worker: Codex array command without a shell" "$WORKER" \
+  "$(codex_call '["rm","-rf","target"]' "$wt")" "${WORKER_ENV[@]}"
+expect_deny "worker: Claude session cwd outside the worktree" "$WORKER" \
+  "$(jq -cn --arg d "$out" '{tool_name: "Bash", tool_input: {command: "touch x"}, cwd: $d}')" "${WORKER_ENV[@]}"
+expect_deny "worker: relative Write from a cwd outside the worktree" "$WORKER" \
+  "$(cwd_call Write '{"file_path":"x"}' "$out")" "${WORKER_ENV[@]}"
+expect_allow "worker: cd inside the worktree moves the base" "$WORKER" \
+  "$(bash_call 'cd src && touch a.rs')" "${WORKER_ENV[@]}"
+
+# Worker: sed scripts are not paths; only in-place targets are checked.
+for c in "sed -i '/^#/d' src/main.rs" "sed --silent '/foo/p' $out/x" "sed -n '/foo/p' $out/x" \
+  "sed -e 's/a/b/' -i src/main.rs" "sed -i.bak s/a/b/ src/main.rs" "sed -E -i 's/a+/b/' src/a.rs"; do
+  expect_allow "worker: sed allowed: $c" "$WORKER" "$(bash_call "$c")" "${WORKER_ENV[@]}"
+done
+for c in "sed -i '/^#/d' $out/x" "sed -e 's/a/b/' -i $out/x" "sed --in-place s/a/b/ $out/x" "sed -Ei s/a/b/ $out/x"; do
+  expect_deny "worker: sed denied: $c" "$WORKER" "$(bash_call "$c")" "${WORKER_ENV[@]}"
+done
+
+# Worker: wrappers, find and nested shells.
+for c in "env rm -rf $out/x" "env FOO=1 rm $out/x" "command rm $out/x" "timeout 5 rm $out/x" "nice -n 5 rm $out/x" \
+  "find $out -delete" "find $out -name x -exec rm {} ;" "find . -exec cp {} $out ;" "bash -c 'rm -rf $out'" \
+  "sh -c true" "eval rm x" "xargs rm" "nohup mv a $out/b"; do
+  expect_deny "worker: denied: $c" "$WORKER" "$(bash_call "$c")" "${WORKER_ENV[@]}"
+done
+for c in 'env FOO=1 cargo test' 'timeout 600 cargo test' 'find . -name "*.rs"' 'find src -name x -delete' \
+  'find . -exec rm {} +' "find $out -name x" 'bash scripts/check.sh' 'xargs grep foo'; do
+  expect_allow "worker: allowed: $c" "$WORKER" "$(bash_call "$c")" "${WORKER_ENV[@]}"
+done
+
+# Worker: push bound to its branch, configurable protected branches.
+bound=(PLAYBOOK_WORKER_WORKTREE="$wt" PLAYBOOK_WORKER_BRANCH=feature/x)
+for c in 'push origin feature/x' 'push origin HEAD:feature/x' 'push origin HEAD' \
+  'push --force-with-lease=feature/x:abc origin feature/x'; do
+  expect_allow "worker (bound): allowed: git $c" "$WORKER" "$(bash_call "git -C \$PLAYBOOK_WORKER_WORKTREE $c")" "${bound[@]}"
+done
+for c in 'push' 'push origin' 'push origin feat:trunk' 'push origin feature/x:v2/core' 'push origin feature/y' \
+  'push origin feature/x other' 'push --force-with-lease=trunk:abc origin feature/x' 'push --tags origin'; do
+  expect_deny "worker (bound): denied: git $c" "$WORKER" "$(bash_call "git -C \$PLAYBOOK_WORKER_WORKTREE $c")" "${bound[@]}"
+done
+expect_deny "worker: custom protected branch" "$WORKER" \
+  "$(bash_call 'git -C $PLAYBOOK_WORKER_WORKTREE push origin feat:trunk')" "${WORKER_ENV[@]}" PLAYBOOK_PROTECTED_BRANCHES="main trunk"
+expect_allow "worker: feature push with custom protected branches" "$WORKER" \
+  "$(bash_call 'git -C $PLAYBOOK_WORKER_WORKTREE push origin feature/x')" "${WORKER_ENV[@]}" PLAYBOOK_PROTECTED_BRANCHES="main trunk"
+
+# Reviewer: relative paths are bound to the tool cwd.
+expect_deny "reviewer: relative Read without a cwd" "$REVIEWER" \
+  "$(tool_call Read '{"file_path":"sub/b.md"}')" "${REVIEW_ENV[@]}"
+expect_deny "reviewer: relative Grep from a cwd outside the snapshot" "$REVIEWER" \
+  "$(cwd_call Grep '{"pattern":"x","path":"src"}' "$out")" "${REVIEW_ENV[@]}"
+expect_deny "reviewer: Codex shell is denied" "$REVIEWER" \
+  "$(codex_call '["bash","-lc","cat a.md"]' "$snap")" "${REVIEW_ENV[@]}"
 
 # ── Summary ────────────────────────────────────────────────────────────
 echo "test-hooks: $pass passed, $fail failed"

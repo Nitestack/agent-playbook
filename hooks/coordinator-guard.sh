@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse guard for orchestrator ("coordinator") threads.
 #
-# Active only when $T3CODE_THREAD_ID is listed in the coordinator registry
+# Active only when the thread id ($PLAYBOOK_THREAD_ID, else $T3CODE_THREAD_ID) is
+# listed in the coordinator registry
 # (${PLAYBOOK_COORDINATOR_REGISTRY:-$HOME/.local/state/agent-playbook/coordinator-threads.json}).
 # Unset variable, missing/unreadable/malformed registry or an unlisted thread
 # exit 0 at once, so ordinary interactive sessions are never touched.
@@ -14,9 +15,13 @@
 #   - run read-only gh (pr view/list/diff/checks/status, issue view/list/status,
 #     run list/view, repo view), `gh issue create|comment` and GET-only `gh api`,
 #   - run the publish broker (`publish-broker`, `publish-broker.sh`, also as
-#     `sudo [-n] -u publisher <broker>`).
+#     `sudo [-n] -u publisher <broker>`),
+#   - run `playbook-registry.sh` to drain itself, register a successor,
+#     remove another coordinator, and add or remove review entries.
 # Everything else is denied: file edits, cargo/pnpm/npm builds, git push/commit/
-# checkout/rebase/merge, gh pr merge, redirections to files, substitutions.
+# checkout/rebase/merge, gh pr merge, `gh pr checks --watch`, forge MCP tools
+# that merge or write code (for example `*pull_request_merge`), removing its
+# own registry entry, redirections to files, substitutions.
 #
 # While the entry has "draining": true, new dispatches (delegate_task,
 # invoke_subagent, create_threads, Agent/Task, t3_thread_launch) are denied.
@@ -31,7 +36,7 @@ here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 # shellcheck source=guard-lib.sh
 . "$here/guard-lib.sh"
 
-tid=${T3CODE_THREAD_ID:-}
+tid=$(thread_id)
 [ -n "$tid" ] || exit 0
 registry=${PLAYBOOK_COORDINATOR_REGISTRY:-$HOME/.local/state/agent-playbook/coordinator-threads.json}
 entry=$(registry_entry "$registry" "$tid") || exit 0
@@ -47,6 +52,32 @@ is_broker() {
     publish-broker | publish-broker.sh) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+is_registry_tool() {
+  case ${1##*/} in
+    playbook-registry | playbook-registry.sh) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# registry_allowed: W is a playbook-registry command. A coordinator may drain
+# itself, add coordinators (its successor), remove other coordinators and
+# manage review entries. It may never remove its own entry, which would lift
+# its own guard.
+registry_allowed() {
+  case "${W[1]:-} ${W[2]:-}" in
+    "drain "* | "show "* | "review add" | "review remove" | "coordinator add") return 0 ;;
+    "coordinator remove")
+      if [ "${W[3]:-}" = "$tid" ]; then
+        REASON="a coordinator must not remove its own registry entry"
+        return 1
+      fi
+      return 0
+      ;;
+  esac
+  REASON="unknown playbook-registry command"
+  return 1
 }
 
 # gh_allowed: W is a gh command. Sets REASON and returns 1 when it is not allowed.
@@ -79,6 +110,16 @@ gh_allowed() {
     esac
     i=$((i + 1))
   done
+  if [ "$group $verb" = "pr checks" ]; then
+    for w in "${W[@]}"; do
+      case $w in
+        --watch | --watch=*)
+          REASON="gh pr checks --watch is a wait loop; end the turn and check again on the next wakeup"
+          return 1
+          ;;
+      esac
+    done
+  fi
   case "$group $verb" in
     "pr view" | "pr list" | "pr diff" | "pr checks" | "pr status" | \
       "issue view" | "issue list" | "issue status" | "issue create" | "issue comment" | \
@@ -125,11 +166,16 @@ segment_allowed() {
   fi
   if [[ $cmd == */* ]]; then
     is_broker "$cmd" && return 0
+    is_registry_tool "$cmd" && {
+      registry_allowed
+      return
+    }
     REASON="commands must be invoked by name, not by path ($cmd)"
     return 1
   fi
   case $cmd in
     publish-broker | publish-broker.sh) return 0 ;;
+    playbook-registry | playbook-registry.sh) registry_allowed ;;
     ls | cat | head | tail | wc | jq | pwd | cd | echo | basename | dirname | realpath | stat | true)
       return 0
       ;;
@@ -175,6 +221,11 @@ case $tool in
   Edit | Write | NotebookEdit | MultiEdit | apply_patch)
     deny "coordinator-guard: $tool is blocked for coordinators; delegate file changes to a worker."
     ;;
+  # Forge tools that land, rewrite or write code. Merges go through publish-pr.
+  *pull_request_merge | *merge_pull_request | *update_pull_request_branch | \
+    *push_files | *create_or_update_file | *delete_file | *create_branch)
+    deny "coordinator-guard: $tool can merge or write to the forge; coordinators hand approved PRs to publish-pr."
+    ;;
   Agent | Task | *delegate_task | *invoke_subagent | *create_threads | *t3_thread_launch)
     [ "$draining" = true ] || exit 0
     marker=$(jq -r '.handoff_marker // ""' <<<"$entry")
@@ -185,7 +236,6 @@ case $tool in
     deny "coordinator-guard: this shift is draining; $tool is frozen. Only the successor launch carrying the handoff_marker is allowed."
     ;;
   Bash | shell | local_shell | exec_command | unified_exec)
-    PARSE_MODE=strict
     command=$(tool_command)
     if ! parse_command "$command"; then
       deny "coordinator-guard: cannot verify the command ($PARSE_ERR). Coordinators run only simple read-only git/gh/inspection commands."

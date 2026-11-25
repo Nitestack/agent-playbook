@@ -1,6 +1,8 @@
 # shellcheck shell=bash
+# PARSE_ERR, CMDS, W and the GIT_* results are read by the guards that source this file.
+# shellcheck disable=SC2034
 # Shared helpers for the PreToolUse guards. Sourced by the guards, never run.
-# Needs only bash, jq and coreutils (`realpath`).
+# Needs bash 4 or newer, jq, git and GNU coreutils (`realpath -e` and `-m`).
 #
 # Contract of every guard: read the hook JSON on stdin, exit 0 to allow, or
 # call `deny` (exit 2 with the reason on stderr, which Claude Code and Codex
@@ -23,6 +25,12 @@ deny() {
 }
 
 # ── Registries ─────────────────────────────────────────────────────────
+
+# thread_id: the identity of the current agent thread. PLAYBOOK_THREAD_ID wins;
+# T3 Code sets T3CODE_THREAD_ID for every thread it runs, which is the fallback.
+thread_id() {
+  printf '%s' "${PLAYBOOK_THREAD_ID:-${T3CODE_THREAD_ID:-}}"
+}
 
 # registry_entry <file> <thread-id>
 # Print the registry entry (a JSON object) of a thread and return 0, or return
@@ -62,6 +70,12 @@ tool_command() {
 
 # ── Paths ──────────────────────────────────────────────────────────────
 
+# tool_cwd: the directory a tool call runs in, or empty when the hook input does
+# not say. Codex shell calls carry `workdir`; Claude Code passes the session `cwd`.
+tool_cwd() {
+  jq -r '.tool_input.workdir // .tool_input.cwd // .cwd // ""' <<<"$HOOK_INPUT"
+}
+
 # canon_path <path> <base-dir>: absolute path with `.`/`..` and every existing
 # symlink resolved; the path itself need not exist.
 canon_path() {
@@ -86,16 +100,12 @@ has_dotdot() {
 # ── Shell command parsing ──────────────────────────────────────────────
 #
 # parse_command <string> splits a shell command line into simple commands.
-# It honours quotes, escapes, separators (; & | newline and parentheses),
-# comments, here-documents, redirections and substitutions, which is enough
-# to match on words without being fooled by quoted text. It is a guard, not a
-# shell: anything it cannot follow is an error and callers fail closed.
-#
-#   PARSE_MODE=strict   (default) refuse substitutions ($( ), backticks,
-#                       <( )), here-documents and any redirection except
-#                       `2>&1`-style duplication and `>/dev/null`.
-#   PARSE_MODE=lenient  descend into substitutions, skip here-document
-#                       bodies and ignore redirections.
+# It honours quotes, escapes, separators (; & | newline and parentheses) and
+# comments, which is enough to match on words without being fooled by quoted
+# text. It is a guard, not a shell: it refuses what it cannot follow, and
+# callers fail closed. Refused: command and process substitution ($( ),
+# backticks, <( )), input redirection and here-documents, and every output
+# redirection except `2>&1`-style duplication and `>/dev/null`.
 #
 # Result: CMDS holds one element per simple command, words joined by US.
 # split_cmd <element> fills the array W with its words.
@@ -104,12 +114,8 @@ US=$'\x1f'
 CMDS=()
 W=()
 PARSE_ERR=""
-PARSE_MODE=${PARSE_MODE:-strict}
-_s=""
-_n=0
-_i=0
 
-# The helpers below read and write the locals of parse_seq (dynamic scoping).
+# The helpers below read and write the locals of parse_command (dynamic scoping).
 _flush_word() {
   if ((inword)); then words+=("$cur"); fi
   cur=""
@@ -132,83 +138,41 @@ _flush_cmd() {
   words=()
 }
 
-# At "$(" or "<(": parse the nested command list; leave _i on its ")".
-_subst() {
-  if [ "$PARSE_MODE" = strict ]; then
-    PARSE_ERR="command and process substitution are not allowed here"
-    return 1
-  fi
-  _i=$((_i + 2))
-  parse_seq 1
-}
-
-# At a backtick: parse the text up to the closing backtick as a command list.
-_backtick() {
-  local rest inner save_s=$_s save_n=$_n save_i=$_i
-  if [ "$PARSE_MODE" = strict ]; then
-    PARSE_ERR="backtick substitution is not allowed here"
-    return 1
-  fi
-  rest=${_s:_i+1}
-  if [[ $rest != *'`'* ]]; then
-    PARSE_ERR="unterminated backtick substitution"
-    return 1
-  fi
-  inner=${rest%%'`'*}
-  _s=$inner
-  _n=${#inner}
-  _i=0
-  parse_seq 0 || return 1
-  _s=$save_s
-  _n=$save_n
-  _i=$((save_i + ${#inner} + 1))
-}
-
 parse_command() {
-  _s=$1
-  _n=${#_s}
-  _i=0
-  CMDS=()
-  PARSE_ERR=""
-  parse_seq 0
-  [ -z "$PARSE_ERR" ]
-}
-
-parse_seq() {
-  local nested=$1 depth=0 cur="" inword=0 words=() q="" c nxt rest word redir_len
-  local hd_delims=() hd_strip=() k line cmp
+  local s=$1 n i=0 cur="" inword=0 words=() q="" c nxt rest redir_len
   local re_dup='^(>&[0-9]+)($|[[:space:];|&)])'
   local re_null='^(>>?[[:space:]]*/dev/null)($|[[:space:];|&)])'
-  while ((_i < _n)); do
-    [ -z "$PARSE_ERR" ] || return 1
-    c=${_s:_i:1}
+  n=${#s}
+  CMDS=()
+  PARSE_ERR=""
+  while ((i < n)); do
+    c=${s:i:1}
     if [ "$q" = "'" ]; then
       if [ "$c" = "'" ]; then q=""; else cur+=$c; fi
     elif [ "$q" = '"' ]; then
       case $c in
         '"') q="" ;;
         '\')
-          nxt=${_s:_i+1:1}
+          nxt=${s:i+1:1}
           case $nxt in
             '"' | '\' | '$' | '`')
               cur+=$nxt
-              _i=$((_i + 1))
+              i=$((i + 1))
               ;;
-            $'\n') _i=$((_i + 1)) ;;
+            $'\n') i=$((i + 1)) ;;
             *) cur+=$c ;;
           esac
           ;;
-        '$')
-          if [ "${_s:_i+1:1}" = "(" ]; then
-            _subst || return 1
-            cur+='$(…)'
-          else
-            cur+=$c
-          fi
-          ;;
         '`')
-          _backtick || return 1
-          cur+='$(…)'
+          PARSE_ERR="backtick substitution is not allowed here"
+          return 1
+          ;;
+        '$')
+          if [ "${s:i+1:1}" = "(" ]; then
+            PARSE_ERR="command substitution is not allowed here"
+            return 1
+          fi
+          cur+=$c
           ;;
         *) cur+=$c ;;
       esac
@@ -223,108 +187,43 @@ parse_seq() {
           inword=1
           ;;
         '\')
-          nxt=${_s:_i+1:1}
-          _i=$((_i + 1))
+          nxt=${s:i+1:1}
+          i=$((i + 1))
           if [ "$nxt" != $'\n' ]; then
             cur+=$nxt
             inword=1
           fi
           ;;
         '`')
-          _backtick || return 1
-          cur+='$(…)'
-          inword=1
+          PARSE_ERR="backtick substitution is not allowed here"
+          return 1
           ;;
         '$')
-          if [ "${_s:_i+1:1}" = "(" ]; then
-            _subst || return 1
-            cur+='$(…)'
-          else
-            cur+=$c
+          if [ "${s:i+1:1}" = "(" ]; then
+            PARSE_ERR="command substitution is not allowed here"
+            return 1
           fi
+          cur+=$c
           inword=1
           ;;
         ' ' | $'\t' | $'\r') _flush_word ;;
-        $'\n')
+        $'\n' | ';' | '|' | '&' | '(' | ')')
           _flush_word
           _flush_cmd
-          if ((${#hd_delims[@]} > 0)); then
-            # Skip the body of every here-document opened on the line just ended.
-            for k in "${!hd_delims[@]}"; do
-              _i=$((_i + 1))
-              while ((_i < _n)); do
-                rest=${_s:_i}
-                line=${rest%%$'\n'*}
-                _i=$((_i + ${#line} + 1))
-                cmp=$line
-                if ((hd_strip[k])); then cmp=${line#"${line%%[!$'\t']*}"}; fi
-                [ "$cmp" = "${hd_delims[k]}" ] && break
-              done
-              _i=$((_i - 1))
-            done
-            hd_delims=()
-            hd_strip=()
-          fi
-          ;;
-        ';' | '|' | '&' | '(')
-          _flush_word
-          _flush_cmd
-          if [ "$c" = "(" ]; then depth=$((depth + 1)); fi
-          ;;
-        ')')
-          _flush_word
-          _flush_cmd
-          if ((depth > 0)); then
-            depth=$((depth - 1))
-          elif ((nested)); then
-            return 0
-          fi
           ;;
         '#')
           if ((inword)); then
             cur+=$c
           else
-            while ((_i + 1 < _n)) && [ "${_s:_i+1:1}" != $'\n' ]; do _i=$((_i + 1)); done
+            while ((i + 1 < n)) && [ "${s:i+1:1}" != $'\n' ]; do i=$((i + 1)); done
           fi
           ;;
         '<')
-          nxt=${_s:_i+1:1}
-          if [ "$PARSE_MODE" = strict ]; then
-            PARSE_ERR="input redirection, here-documents and process substitution are not allowed here"
-            return 1
-          fi
-          if [ "$nxt" = "(" ]; then
-            _subst || return 1
-            cur+='$(…)'
-            inword=1
-          elif [ "$nxt" = "<" ] && [ "${_s:_i+2:1}" != "<" ]; then
-            # Here-document: remember the delimiter, skip its body at the newline.
-            _i=$((_i + 2))
-            if [ "${_s:_i:1}" = "-" ]; then
-              hd_strip+=(1)
-              _i=$((_i + 1))
-            else
-              hd_strip+=(0)
-            fi
-            while [[ ${_s:_i:1} == [[:blank:]] ]]; do _i=$((_i + 1)); done
-            word=""
-            while ((_i < _n)) && [[ ${_s:_i:1} != [[:space:]\;\&\|\(\)\<\>] ]]; do
-              case ${_s:_i:1} in
-                "'" | '"' | '\') ;;
-                *) word+=${_s:_i:1} ;;
-              esac
-              _i=$((_i + 1))
-            done
-            hd_delims+=("$word")
-            _i=$((_i - 1))
-            _flush_word
-          else
-            _flush_word
-            if [ "$nxt" = "<" ]; then _i=$((_i + 2)); fi
-          fi
+          PARSE_ERR="input redirection, here-documents and process substitution are not allowed here"
+          return 1
           ;;
         '>')
-          rest=${_s:_i}
+          rest=${s:i}
           if [[ $rest =~ $re_dup || $rest =~ $re_null ]]; then
             # Redirection to a descriptor or /dev/null; drop a glued `2` of `2>&1`.
             # Read BASH_REMATCH before any other [[ =~ ]] overwrites it.
@@ -333,13 +232,10 @@ parse_seq() {
               cur=""
               inword=0
             fi
-            _i=$((_i + redir_len - 1))
-          elif [ "$PARSE_MODE" = strict ]; then
+            i=$((i + redir_len - 1))
+          else
             PARSE_ERR="output redirection is not allowed here"
             return 1
-          else
-            _flush_word
-            while [[ ${_s:_i+1:1} == [\>\&\|] ]]; do _i=$((_i + 1)); done
           fi
           ;;
         *)
@@ -348,14 +244,10 @@ parse_seq() {
           ;;
       esac
     fi
-    _i=$((_i + 1))
+    i=$((i + 1))
   done
   if [ -n "$q" ]; then
     PARSE_ERR="unterminated quote"
-    return 1
-  fi
-  if ((nested)); then
-    PARSE_ERR="unterminated command substitution"
     return 1
   fi
   _flush_word
@@ -402,8 +294,6 @@ git_parse() {
         ;;
       --no-pager | --no-optional-locks | -P) i=$((i + 1)) ;;
       -*)
-        # GIT_BAD is read by the guard that sources this file, not here.
-        # shellcheck disable=SC2034
         GIT_BAD="git option $w before the subcommand cannot be analysed"
         return 0
         ;;
@@ -417,9 +307,10 @@ git_parse() {
 }
 
 # git_is_readonly: true when the parsed git command (GIT_SUB, GIT_ARGS) cannot
-# change the repository, its index, its config or any file.
+# change the repository, its index, its config or any file, and runs no
+# program named on the command line.
 git_is_readonly() {
-  local a has_list=0 positional=0
+  local a has_list=0 positional=0 i n=${#GIT_ARGS[@]}
   case $GIT_SUB in
     status | log | diff | show | rev-parse | merge-base | rev-list | ls-files | ls-tree | cat-file | \
       range-diff | patch-id | describe | for-each-ref | blame | shortlog | show-ref | ls-remote | \
@@ -427,19 +318,31 @@ git_is_readonly() {
       for a in "${GIT_ARGS[@]}"; do
         case $a in
           --output | --output=*) return 1 ;;
+          # ls-remote runs the program these options name.
+          --upload-pack | --upload-pack=* | --exec | --exec=*) return 1 ;;
+          # External diff and text conversion drivers run programs too.
+          --ext-diff | --textconv) return 1 ;;
         esac
       done
       return 0
       ;;
     branch)
-      for a in "${GIT_ARGS[@]}"; do
+      i=0
+      while ((i < n)); do
+        a=${GIT_ARGS[i]}
         case $a in
           --list | -l | --show-current) has_list=1 ;;
-          -a | -r | -v | -vv | --all | --remotes | --verbose | --merged | --no-merged | \
-            --contains | --no-contains | --points-at | --sort=* | --format=* | --color | --no-color) ;;
+          --merged | --no-merged | --contains | --no-contains | --points-at)
+            # These take an optional commit; consume it so it is not read as a new branch name.
+            if ((i + 1 < n)) && [[ ${GIT_ARGS[i + 1]} != -* ]]; then i=$((i + 1)); fi
+            has_list=1
+            ;;
+          --merged=* | --no-merged=* | --contains=* | --no-contains=* | --points-at=*) has_list=1 ;;
+          -a | -r | -v | -vv | --all | --remotes | --verbose | --sort=* | --format=* | --color | --no-color) ;;
           -*) return 1 ;;
           *) positional=1 ;;
         esac
+        i=$((i + 1))
       done
       ((has_list == 1 || positional == 0))
       ;;
