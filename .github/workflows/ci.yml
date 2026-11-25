@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: hook tests and skill lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Hook tests
+        run: bash hooks/tests/test-hooks.sh
+
+      - name: Skill lint
+        run: |
+          set -uo pipefail
+          fail=0
+
+          # 1. skills/ holds only Markdown files: no scripts, shims, symlinks or binaries.
+          while IFS= read -r path; do
+            echo "::error file=$path::non-Markdown entry in skills/"
+            fail=1
+          done < <(find skills -mindepth 1 ! -type d ! -name '*.md')
+
+          # 2. Every skill directory has a SKILL.md whose frontmatter has a name that
+          #    matches the directory, and a description.
+          names=()
+          for dir in skills/*/; do
+            dir=${dir%/}
+            file="$dir/SKILL.md"
+            base=${dir##*/}
+            if [ ! -f "$file" ]; then
+              echo "::error file=$dir::missing SKILL.md"
+              fail=1
+              continue
+            fi
+            if [ "$(head -n 1 "$file")" != "---" ]; then
+              echo "::error file=$file::no frontmatter (first line must be ---)"
+              fail=1
+              continue
+            fi
+            name=$(sed -n '2,/^---$/{s/^name:[[:space:]]*//p;}' "$file" | head -n 1)
+            if [ "$name" != "$base" ]; then
+              echo "::error file=$file::frontmatter name '$name' does not match directory '$base'"
+              fail=1
+            fi
+            if ! sed -n '2,/^---$/p' "$file" | grep -q '^description:[[:space:]]*[^[:space:]]'; then
+              echo "::error file=$file::frontmatter has no description"
+              fail=1
+            fi
+            names+=("$name")
+          done
+
+          # 3. Skill names are unique across the set.
+          dupes=$(printf '%s\n' "${names[@]}" | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "::error::duplicate skill names: $dupes"
+            fail=1
+          fi
+
+          [ "$fail" -eq 0 ]
