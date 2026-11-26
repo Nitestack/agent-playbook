@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # PreToolUse guard for implementation workers.
 #
-# Active only when $PLAYBOOK_WORKER_WORKTREE is set. Unset means exit 0 at once.
-# The worktree is resolved with realpath; if it does not resolve to a directory
-# every tool call is denied (fail closed).
+# Active when $PLAYBOOK_WORKER_WORKTREE is set, or when the calling thread
+# ($PLAYBOOK_THREAD_ID, else $T3CODE_THREAD_ID) is listed in the worker registry
+# (${PLAYBOOK_WORKER_REGISTRY:-$HOME/.local/state/agent-playbook/worker-threads.json},
+# entry {"worktree": ..., "branch": ...}). The environment wins over the entry.
+# Otherwise exit 0 before reading stdin. The worktree is resolved with realpath;
+# if it does not resolve to a directory every tool call is denied (fail closed).
 #
 # Relative paths count from the directory the tool runs in: the call's
 # `workdir`/`cwd` (Codex) or the session `cwd` (Claude Code), else the worktree.
@@ -24,13 +27,14 @@
 #     with the edit tools instead.
 #   - git: mutating subcommands must name the worktree with `git -C <worktree>`,
 #     and every -C directory must resolve inside it. Read-only git runs anywhere.
-#   - git push: --all, --mirror and --tags are denied. With
-#     $PLAYBOOK_WORKER_BRANCH set, a push must name a remote and that branch as
-#     its only destination (`push origin <branch>`, `HEAD:<branch>`, or `HEAD`
-#     while on it). Without it, a push must not reach a protected branch
-#     ($PLAYBOOK_PROTECTED_BRANCHES, default "main master develop"), whether named
-#     directly, in a refspec, inside --force-with-lease=, or by a plain push while
-#     the worktree is on one.
+#   - git push: --all, --mirror and --tags are denied. A push must not reach a
+#     protected branch ($PLAYBOOK_PROTECTED_BRANCHES, default "main master
+#     develop"), whether named directly, in a refspec, inside --force-with-lease=,
+#     through HEAD while the worktree is on one, or by a plain push from one; this
+#     holds even for a bound worker. With $PLAYBOOK_WORKER_BRANCH set (or the
+#     branch of its registry entry), a push must also name a remote and that branch
+#     as its only destination (`push origin <branch>`, `HEAD:<branch>`, or `HEAD`
+#     while on it).
 #
 # Reads are unrestricted. Interpreters (python, node, ...) are not inspected.
 # Not a defense against a determined adversary; it stops a well-meaning worker
@@ -41,15 +45,26 @@ here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 # shellcheck source=guard-lib.sh
 . "$here/guard-lib.sh"
 
-[ -n "${PLAYBOOK_WORKER_WORKTREE:-}" ] || exit 0
+# The environment binds first; otherwise the worker registry entry of this thread.
+# Both lookups happen before stdin is read, so an inactive guard never blocks.
+WORKTREE=${PLAYBOOK_WORKER_WORKTREE:-}
+ENTRY_BRANCH=""
+if [ -z "$WORKTREE" ]; then
+  tid=$(thread_id)
+  [ -n "$tid" ] || exit 0
+  wreg=${PLAYBOOK_WORKER_REGISTRY:-$HOME/.local/state/agent-playbook/worker-threads.json}
+  entry=$(registry_entry "$wreg" "$tid") || exit 0
+  WORKTREE=$(jq -r '.worktree // ""' <<<"$entry")
+  ENTRY_BRANCH=$(jq -r '.branch // ""' <<<"$entry")
+fi
 
-WT=$(realpath -e -- "$PLAYBOOK_WORKER_WORKTREE" 2>/dev/null) || WT=""
+WT=$(realpath -e -- "$WORKTREE" 2>/dev/null) || WT=""
 HOOK_INPUT=$(cat)
 if [ -z "$WT" ] || [ ! -d "$WT" ]; then
-  deny "worker-guard: PLAYBOOK_WORKER_WORKTREE ($PLAYBOOK_WORKER_WORKTREE) does not resolve to a directory; refusing all tools"
+  deny "worker-guard: the worktree ($WORKTREE) does not resolve to a directory; refusing all tools"
 fi
 tool=$(jq -r '.tool_name // ""' <<<"$HOOK_INPUT") || deny "worker-guard: unreadable hook input"
-BRANCH=${PLAYBOOK_WORKER_BRANCH:-}
+BRANCH=${PLAYBOOK_WORKER_BRANCH:-$ENTRY_BRANCH}
 read -ra PROTECTED <<<"${PLAYBOOK_PROTECTED_BRANCHES:-main master develop}"
 
 # BASE: the directory relative paths count from.
@@ -125,6 +140,20 @@ push_allowed() {
   done
   current=$(git -C "$dir" symbolic-ref --short -q HEAD 2>/dev/null) || current=""
 
+  # Protected branches are refused first, bound or not, so a worker bound to
+  # main cannot push main. HEAD counts as the branch the worktree is on.
+  for a in "${lease[@]}" "${pos[@]:1}"; do
+    sub=${a#+}
+    read -ra parts <<<"${sub//:/ }"
+    for part in "${parts[@]}"; do
+      if [ "$part" = HEAD ]; then part=$current; fi
+      if protected_branch "$(short_ref "$part")"; then
+        REASON="git push must not target $(short_ref "$part"); workers push only their own branch"
+        return 1
+      fi
+    done
+  done
+
   if [ -n "$BRANCH" ]; then
     # Bound worker: an explicit remote and exactly its own branch as destination.
     if [ "${#pos[@]}" -lt 2 ]; then
@@ -148,18 +177,7 @@ push_allowed() {
     return 0
   fi
 
-  # Unbound worker: never a protected branch.
-  for a in "${lease[@]}" "${pos[@]:1}"; do
-    sub=${a#+}
-    read -ra parts <<<"${sub//:/ }"
-    for part in "${parts[@]}"; do
-      if protected_branch "$(short_ref "$part")"; then
-        REASON="git push must not target $(short_ref "$part"); workers push only their feature branch"
-        return 1
-      fi
-    done
-  done
-  # A plain push, or one naming HEAD, pushes the worktree's own branch.
+  # Unbound worker: a plain push, or one naming HEAD, pushes the worktree's own branch.
   local push_current=0
   if [ "${#pos[@]}" -le 1 ]; then push_current=1; fi
   for a in "${pos[@]:1}"; do

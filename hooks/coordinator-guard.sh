@@ -7,7 +7,10 @@
 # Unset variable, missing/unreadable/malformed registry or an unlisted thread
 # exit 0 at once, so ordinary interactive sessions are never touched.
 #
-# A registered coordinator may
+# The entry's lifecycle state is `state`, else "draining" when `draining` is
+# true, else "active". Each state has its own rules:
+#
+# active: a registered coordinator may
 #   - read: Read/Grep/Glob, MCP orchestration tools, ls cat head tail rg jq wc ...
 #   - run read-only git (status log diff show rev-parse merge-base rev-list
 #     ls-files ls-tree cat-file range-diff patch-id describe for-each-ref blame
@@ -16,17 +19,26 @@
 #     run list/view, repo view), `gh issue create|comment` and GET-only `gh api`,
 #   - run the publish broker (`publish-broker`, `publish-broker.sh`, also as
 #     `sudo [-n] -u publisher <broker>`),
-#   - run `playbook-registry.sh` to drain itself, register a successor,
-#     remove another coordinator, and add or remove review entries.
+#   - run `playbook-registry.sh` renew, drain, status, show, review add|snapshot|
+#     remove, worker add|remove, coordinator add, and coordinator remove of any
+#     other entry that is not retired.
+# draining: new dispatches (delegate_task, invoke_subagent, create_threads,
+#   Agent/Task, run_scheduled_task_now, t3_queue) are denied. The handoff successor
+#   may be launched only with the entry's "handoff_marker" in the call input, the
+#   bound "candidate" may be messaged, a one-shot schedule may carry the marker,
+#   publish-broker may only run `status`, and the registry accepts bind-candidate,
+#   abort, status, show and review remove.
+# candidate: dispatch-disabled. No Agent/Task, delegate, subagent, launch, send,
+#   scheduled run, queue or publish-broker. The registry accepts takeover, status
+#   and show only. Read tools and read-only shell remain.
+# retired: inert. Only teardown and read tools (unwatch_pull_request,
+#   delete_scheduled_task, pull_request_read, t3_thread_read, list_*, Read, Grep,
+#   Glob) and shell lines that run `playbook-registry.sh show|status` pass.
+#
 # Everything else is denied: file edits, cargo/pnpm/npm builds, git push/commit/
 # checkout/rebase/merge, gh pr merge, `gh pr checks --watch`, forge MCP tools
 # that merge or write code (for example `*pull_request_merge`), removing its
-# own registry entry, redirections to files, substitutions.
-#
-# While the entry has "draining": true, new dispatches (delegate_task,
-# invoke_subagent, create_threads, Agent/Task, t3_thread_launch) are denied.
-# The one exception is t3_thread_launch of the handoff successor, recognized by
-# the entry's "handoff_marker" string appearing verbatim in the call input.
+# own registry entry, removing a retired entry, redirections to files, substitutions.
 #
 # Not a defense against a determined adversary; it stops a well-meaning
 # orchestrator from drifting into hands-on work.
@@ -43,7 +55,14 @@ entry=$(registry_entry "$registry" "$tid") || exit 0
 
 HOOK_INPUT=$(cat)
 tool=$(jq -r '.tool_name // ""' <<<"$HOOK_INPUT") || deny "coordinator-guard: unreadable hook input"
-draining=$(jq -r '.draining == true' <<<"$entry")
+STATE=$(jq -r '.state // (if .draining == true then "draining" else "active" end)' <<<"$entry") \
+  || deny "coordinator-guard: unreadable registry entry for $tid"
+case $STATE in
+  active | draining | candidate | retired) ;;
+  *) deny "coordinator-guard: unknown lifecycle state '$STATE' for $tid; refusing every tool" ;;
+esac
+marker=$(jq -r '.handoff_marker // ""' <<<"$entry")
+candidate=$(jq -r '.candidate // ""' <<<"$entry")
 
 REASON=""
 
@@ -61,22 +80,83 @@ is_registry_tool() {
   esac
 }
 
-# registry_allowed: W is a playbook-registry command. A coordinator may drain
-# itself, add coordinators (its successor), remove other coordinators and
-# manage review entries. It may never remove its own entry, which would lift
-# its own guard.
+# entry_state <entry-json>: the lifecycle state of a registry entry.
+entry_state() {
+  jq -r '.state // (if .draining == true then "draining" else "active" end)' <<<"$1"
+}
+
+# registry_allowed: W is a playbook-registry command. What it may do depends on
+# STATE. Nothing a coordinator can do may remove its own entry (that would lift
+# its guard) or a retired entry (the operator's call). Sets REASON on refusal.
 registry_allowed() {
-  case "${W[1]:-} ${W[2]:-}" in
-    "drain "* | "show "* | "review add" | "review snapshot" | "review remove" | "coordinator add") return 0 ;;
-    "coordinator remove")
-      if [ "${W[3]:-}" = "$tid" ]; then
+  local cmd=${W[1]:-} arg=${W[2]:-} other other_entry
+  case $STATE:$cmd:$arg in
+    active:renew:* | active:drain:* | active:status:* | active:show:*) return 0 ;;
+    active:review:add | active:review:snapshot | active:review:remove) return 0 ;;
+    active:worker:add | active:worker:remove | active:coordinator:add) return 0 ;;
+    active:coordinator:remove)
+      other=${W[3]:-}
+      if [ -z "$other" ]; then
+        REASON="coordinator remove needs a thread id"
+        return 1
+      fi
+      if [ "$other" = "$tid" ]; then
         REASON="a coordinator must not remove its own registry entry"
+        return 1
+      fi
+      if other_entry=$(registry_entry "$registry" "$other") && [ "$(entry_state "$other_entry")" = retired ]; then
+        REASON="$other is retired; a coordinator must not remove a retired entry"
         return 1
       fi
       return 0
       ;;
+    draining:drain:* | draining:bind-candidate:* | draining:abort:* | draining:status:* | draining:show:* | draining:review:remove)
+      return 0
+      ;;
+    candidate:takeover:* | candidate:status:* | candidate:show:*) return 0 ;;
+    retired:status:* | retired:show:*) return 0 ;;
   esac
-  REASON="unknown playbook-registry command"
+  REASON="playbook-registry ${cmd:-?} ${arg} is not allowed while this coordinator is $STATE"
+  return 1
+}
+
+# broker_allowed <args after the broker name>: active coordinators run the broker;
+# a draining one may only check its status; a candidate or retired one not at all.
+broker_allowed() {
+  local a
+  case $STATE in
+    active) return 0 ;;
+    draining)
+      if [ "${1:-}" = status ]; then
+        for a in "${@:2}"; do
+          case $a in
+            -*) ;;
+            *)
+              REASON="a draining coordinator may only run publish-broker status"
+              return 1
+              ;;
+          esac
+        done
+        return 0
+      fi
+      REASON="a draining coordinator may only run publish-broker status"
+      return 1
+      ;;
+    *)
+      REASON="publish-broker is closed while this coordinator is $STATE"
+      return 1
+      ;;
+  esac
+}
+
+# retired_segment_allowed: a retired coordinator's shell may only inspect the registry.
+retired_segment_allowed() {
+  local cmd=${W[0]##*/}
+  if { [ "$cmd" = playbook-registry ] || [ "$cmd" = playbook-registry.sh ]; } \
+    && { [ "${W[1]:-}" = show ] || [ "${W[1]:-}" = status ]; }; then
+    return 0
+  fi
+  REASON="a retired coordinator may only run playbook-registry show or status"
   return 1
 }
 
@@ -165,16 +245,19 @@ segment_allowed() {
     return 1
   fi
   if [[ $cmd == */* ]]; then
-    is_broker "$cmd" && return 0
-    is_registry_tool "$cmd" && {
+    if is_broker "$cmd"; then
+      broker_allowed "${W[@]:1}"
+      return
+    fi
+    if is_registry_tool "$cmd"; then
       registry_allowed
       return
-    }
+    fi
     REASON="commands must be invoked by name, not by path ($cmd)"
     return 1
   fi
   case $cmd in
-    publish-broker | publish-broker.sh) return 0 ;;
+    publish-broker | publish-broker.sh) broker_allowed "${W[@]:1}" ;;
     playbook-registry | playbook-registry.sh) registry_allowed ;;
     ls | cat | head | tail | wc | jq | pwd | cd | echo | basename | dirname | realpath | stat | true)
       return 0
@@ -205,7 +288,8 @@ segment_allowed() {
       i=1
       if [ "${W[i]:-}" = -n ]; then i=2; fi
       if [ "${W[i]:-}" = -u ] && [ "${W[i + 1]:-}" = publisher ] && is_broker "${W[i + 2]:-}"; then
-        return 0
+        broker_allowed "${W[@]:i+3}"
+        return
       fi
       REASON="sudo is only allowed as: sudo [-n] -u publisher <publish-broker>"
       return 1
@@ -214,6 +298,93 @@ segment_allowed() {
       REASON="$cmd is not on the coordinator allowlist (no builds, tests or repo writes; delegate them)"
       return 1
       ;;
+  esac
+}
+
+# bash_gate: every simple command of a shell line must pass for the current STATE.
+bash_gate() {
+  local command element
+  command=$(tool_command)
+  if ! parse_command "$command"; then
+    deny "coordinator-guard: cannot verify the command ($PARSE_ERR). Coordinators run only simple read-only git/gh/inspection commands."
+  fi
+  for element in "${CMDS[@]}"; do
+    split_cmd "$element"
+    REASON=""
+    if [ "$STATE" = retired ]; then
+      retired_segment_allowed || deny "coordinator-guard: ${W[*]:0:4}: $REASON"
+    elif ! segment_allowed; then
+      deny "coordinator-guard: ${W[*]:0:4}: $REASON"
+    fi
+  done
+  exit 0
+}
+
+# retired_gate: an inert coordinator keeps only teardown, reads and registry inspection.
+retired_gate() {
+  case $tool in
+    *unwatch_pull_request | *delete_scheduled_task | *pull_request_read | *t3_thread_read | \
+      *list_scheduled_tasks | *list_thread_pull_requests | Read | Grep | Glob)
+      exit 0
+      ;;
+    Bash | shell | local_shell | exec_command | unified_exec) bash_gate ;;
+    *)
+      deny "coordinator-guard: this coordinator is retired; $tool is refused. Only teardown and read tools remain."
+      ;;
+  esac
+}
+
+# candidate_gate: dispatch is disabled until the candidate takes over.
+candidate_gate() {
+  case $tool in
+    Agent | Task | *delegate_task | *invoke_subagent | *create_threads | *t3_thread_launch | \
+      *t3_thread_send* | *run_scheduled_task_now | *t3_queue)
+      deny "coordinator-guard: this candidate is dispatch-disabled until takeover; $tool is refused."
+      ;;
+    Bash | shell | local_shell | exec_command | unified_exec) bash_gate ;;
+    *) exit 0 ;;
+  esac
+}
+
+# draining_gate: the shift is frozen except the handoff path: the marked successor
+# launch, the marked one-shot schedule, messages to the bound candidate, and status.
+draining_gate() {
+  case $tool in
+    Agent | Task | *delegate_task | *invoke_subagent | *create_threads | *run_scheduled_task_now | *t3_queue)
+      deny "coordinator-guard: this shift is draining; $tool is frozen."
+      ;;
+    *t3_thread_launch)
+      if [ -n "$marker" ] && jq -e --arg m "$marker" '.tool_input | tostring | contains($m)' \
+        <<<"$HOOK_INPUT" >/dev/null 2>&1; then
+        exit 0
+      fi
+      deny "coordinator-guard: this shift is draining; only the successor launch carrying the handoff_marker is allowed."
+      ;;
+    *t3_thread_send*)
+      if [ -n "$candidate" ] && jq -e --arg c "$candidate" '.tool_input.threadId == $c' \
+        <<<"$HOOK_INPUT" >/dev/null 2>&1; then
+        exit 0
+      fi
+      deny "coordinator-guard: this shift is draining; messages go only to the bound candidate."
+      ;;
+    *schedule_task)
+      if [ -n "$marker" ] && jq -e --arg m "$marker" \
+        '.tool_input.schedule.type == "once" and ((.tool_input.prompt // "") | tostring | contains($m))' \
+        <<<"$HOOK_INPUT" >/dev/null 2>&1; then
+        exit 0
+      fi
+      deny "coordinator-guard: this shift is draining; only a one-shot schedule carrying the handoff_marker is allowed."
+      ;;
+    Bash | shell | local_shell | exec_command | unified_exec) bash_gate ;;
+    *) exit 0 ;;
+  esac
+}
+
+# active_gate: the shell rules and the registry rules; dispatch is open.
+active_gate() {
+  case $tool in
+    Bash | shell | local_shell | exec_command | unified_exec) bash_gate ;;
+    *) exit 0 ;;
   esac
 }
 
@@ -226,27 +397,12 @@ case $tool in
     *push_files | *create_or_update_file | *delete_file | *create_branch)
     deny "coordinator-guard: $tool can merge or write to the forge; coordinators hand approved PRs to publish-pr."
     ;;
-  Agent | Task | *delegate_task | *invoke_subagent | *create_threads | *t3_thread_launch)
-    [ "$draining" = true ] || exit 0
-    marker=$(jq -r '.handoff_marker // ""' <<<"$entry")
-    if [[ $tool == *t3_thread_launch && -n $marker ]] \
-      && jq -e --arg m "$marker" '.tool_input | tostring | contains($m)' <<<"$HOOK_INPUT" >/dev/null 2>&1; then
-      exit 0
-    fi
-    deny "coordinator-guard: this shift is draining; $tool is frozen. Only the successor launch carrying the handoff_marker is allowed."
-    ;;
-  Bash | shell | local_shell | exec_command | unified_exec)
-    command=$(tool_command)
-    if ! parse_command "$command"; then
-      deny "coordinator-guard: cannot verify the command ($PARSE_ERR). Coordinators run only simple read-only git/gh/inspection commands."
-    fi
-    for element in "${CMDS[@]}"; do
-      split_cmd "$element"
-      if ! segment_allowed; then
-        deny "coordinator-guard: ${W[*]:0:4}: $REASON"
-      fi
-    done
-    exit 0
-    ;;
-  *) exit 0 ;;
 esac
+
+case $STATE in
+  retired) retired_gate ;;
+  candidate) candidate_gate ;;
+  draining) draining_gate ;;
+  *) active_gate ;;
+esac
+exit 0

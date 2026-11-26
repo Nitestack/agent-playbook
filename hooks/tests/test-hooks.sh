@@ -513,6 +513,302 @@ check "snapshot: remove unregisters" registry bash "$hooks/playbook-registry.sh"
 check "snapshot: remove deletes the snapshot" test ! -e "$root"
 check "snapshot: the entry is gone" jq -e 'has("rev-snap") | not' "$reviews_reg"
 
+# ── Coordinator lifecycle: renew, status, drain, candidate, takeover, abort ──
+# as_thread <registry> <thread-id> <registry args...>: run the registry as a thread.
+as_thread() {
+  local reg=$1 thread=$2
+  shift 2
+  env -i PATH="$PATH" HOME="$home" PLAYBOOK_COORDINATOR_REGISTRY="$reg" \
+    PLAYBOOK_REVIEW_REGISTRY="$reviews_reg" T3CODE_THREAD_ID="$thread" \
+    bash "$hooks/playbook-registry.sh" "$@"
+}
+
+# refuses <name> <command...>: the command must fail.
+refuses() {
+  local name=$1
+  shift
+  if "$@" >/dev/null 2>"$tmp/refuse-err"; then
+    fail=$((fail + 1))
+    echo "FAIL: $name -- the command succeeded"
+  else
+    pass=$((pass + 1))
+  fi
+}
+
+# open_stdin_guard <guard> [VAR=value ...]: run a guard whose stdin pipe never closes.
+# RC 0 means it returned without reading stdin; 124 means timeout killed it.
+open_stdin_guard() {
+  local guard=$1 hold fifo=$tmp/stdin-$1.fifo rc=0
+  shift
+  rm -f -- "$fifo"
+  mkfifo "$fifo"
+  (exec sleep 30 >"$fifo") &
+  hold=$!
+  env -i PATH="$PATH" HOME="$home" "$@" timeout 2 bash "$hooks/$guard" <"$fifo" >/dev/null 2>&1 || rc=$?
+  kill "$hold" 2>/dev/null
+  wait "$hold" 2>/dev/null
+  RC=$rc
+}
+
+# Renew, status, the drain escalation and abort on one coordinator.
+ren=$tmp/renew.json
+cat >"$ren" <<'JSON'
+{
+  "L-1": { "state": "active", "draining": false, "generation": 3,
+           "started_at": "2020-01-01T00:00:00Z", "cancel_count": 2, "slice": "wave-9" }
+}
+JSON
+as_thread "$ren" L-1 status >"$tmp/status-1"
+check "status: prints the state" grep -qx 'state: active' "$tmp/status-1"
+check "status: prints the cancel count" grep -qx 'cancel_count: 2' "$tmp/status-1"
+check "status: prints the age" grep -q '^age_seconds: [0-9]' "$tmp/status-1"
+check "status: an old shift is due for rotation" grep -qx 'ROTATE_DUE: age>=6h' "$tmp/status-1"
+refuses "status: an unregistered thread is refused" as_thread "$ren" nobody status
+as_thread "$ren" L-1 renew >"$tmp/packet" 2>&1
+check "renew: prints a recovery packet for the thread" grep -qE 'thread: +L-1' "$tmp/packet"
+check "renew: the recovery packet is at most 10 lines" test "$(wc -l <"$tmp/packet")" -le 10
+check "renew: bumps the generation" jq -e '.["L-1"].generation == 4' "$ren"
+check "renew: resets started_at" jq -e '.["L-1"].started_at != "2020-01-01T00:00:00Z"' "$ren"
+check "renew: keeps cancel_count and slice" jq -e '.["L-1"].cancel_count == 2 and .["L-1"].slice == "wave-9"' "$ren"
+check "renew: keeps the coordinator active" jq -e '.["L-1"].state == "active" and .["L-1"].draining == false' "$ren"
+as_thread "$ren" L-1 status >"$tmp/status-2"
+check "status: a fresh shift is not due for rotation" grep -qx 'ROTATE_DUE: no' "$tmp/status-2"
+as_thread "$ren" L-1 drain M-ESC --cancelled >"$tmp/drain-esc" 2>&1
+check "drain: prints the drain deadline" grep -q '^drain_deadline: ' "$tmp/drain-esc"
+check "drain: escalates an owner whose shifts keep getting cancelled" grep -q '^ESCALATE_OWNER' "$tmp/drain-esc"
+check "drain: counts the cancellation" jq -e '.["L-1"].cancel_count == 3' "$ren"
+check "drain: records the marker and the draining state" jq -e '.["L-1"].handoff_marker == "M-ESC" and .["L-1"].state == "draining"' "$ren"
+refuses "renew: refused while draining" as_thread "$ren" L-1 renew
+as_thread "$ren" L-1 abort M-ESC >/dev/null 2>&1
+check "abort: the escalated owner resumes as active" jq -e '.["L-1"].state == "active" and (.["L-1"] | has("handoff_marker") | not)' "$ren"
+check "lock: no lock directory is left behind" test ! -e "$ren.lock"
+
+# Full flow: drain -> bind-candidate -> candidate -> takeover -> retired.
+flow=$tmp/flow.json
+flow_p=(PLAYBOOK_COORDINATOR_REGISTRY="$flow" T3CODE_THREAD_ID=P)
+flow_c=(PLAYBOOK_COORDINATOR_REGISTRY="$flow" T3CODE_THREAD_ID=C)
+check "flow: the operator registers the predecessor P" as_thread "$flow" operator coordinator add P wave-f
+check "flow: P drains under marker M-FLOW" as_thread "$flow" P drain M-FLOW
+expect_deny "flow: draining P cannot message an unbound candidate" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_send '{"threadId":"C","prompt":"go"}')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot run a recurring schedule" "$COORD" \
+  "$(tool_call mcp__t3-code__schedule_task '{"schedule":{"type":"cron","expr":"0 * * * *"},"prompt":"M-FLOW"}')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot run a one-shot schedule without the marker" "$COORD" \
+  "$(tool_call mcp__t3-code__schedule_task '{"schedule":{"type":"once","at":"2030-01-01T00:00:00Z"},"prompt":"check"}')" "${flow_p[@]}"
+expect_allow "flow: draining P may schedule a one-shot that carries the marker" "$COORD" \
+  "$(tool_call mcp__t3-code__schedule_task '{"schedule":{"type":"once","at":"2030-01-01T00:00:00Z"},"prompt":"resume M-FLOW"}')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot run a scheduled task now" "$COORD" \
+  "$(tool_call mcp__t3-code__run_scheduled_task_now '{"id":"t1"}')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot queue work" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_queue '{"prompt":"x"}')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot publish" "$COORD" \
+  "$(bash_call 'publish-broker publish --branch feature/x')" "${flow_p[@]}"
+expect_allow "flow: draining P may check broker status" "$COORD" \
+  "$(bash_call 'publish-broker status')" "${flow_p[@]}"
+expect_deny "flow: draining P cannot renew" "$COORD" "$(bash_call 'playbook-registry.sh renew')" "${flow_p[@]}"
+expect_allow "flow: draining P may read its status" "$COORD" \
+  "$(bash_call 'playbook-registry.sh status')" "${flow_p[@]}"
+check "flow: P binds C as its candidate" as_thread "$flow" P bind-candidate C
+expect_allow "flow: draining P may message the bound candidate" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_send '{"threadId":"C","prompt":"take over M-FLOW"}')" "${flow_p[@]}"
+expect_deny "flow: draining P still cannot message anyone else" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_send '{"threadId":"X","prompt":"hi"}')" "${flow_p[@]}"
+expect_deny "flow: candidate C cannot dispatch delegate_task" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot spawn an Agent" "$COORD" "$(tool_call Agent '{"prompt":"x"}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot launch threads" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_launch '{"prompt":"HANDOFF"}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot send messages" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_send '{"threadId":"P","prompt":"x"}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot run a scheduled task now" "$COORD" \
+  "$(tool_call mcp__t3-code__run_scheduled_task_now '{"id":"t1"}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot queue work" "$COORD" "$(tool_call mcp__t3-code__t3_queue '{}')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot publish" "$COORD" "$(bash_call 'publish-broker publish x')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot drain" "$COORD" "$(bash_call 'playbook-registry.sh drain M-X')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot bind a candidate" "$COORD" \
+  "$(bash_call 'playbook-registry.sh bind-candidate Z')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot abort" "$COORD" "$(bash_call 'playbook-registry.sh abort M-FLOW')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot renew" "$COORD" "$(bash_call 'playbook-registry.sh renew')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot add coordinators" "$COORD" \
+  "$(bash_call 'playbook-registry.sh coordinator add Z')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot write review entries" "$COORD" \
+  "$(bash_call 'playbook-registry.sh review add r /tmp')" "${flow_c[@]}"
+expect_deny "flow: candidate C cannot write worker entries" "$COORD" \
+  "$(bash_call 'playbook-registry.sh worker add w /tmp')" "${flow_c[@]}"
+expect_allow "flow: candidate C may take over" "$COORD" \
+  "$(bash_call 'playbook-registry.sh takeover P M-FLOW')" "${flow_c[@]}"
+expect_allow "flow: candidate C may read the registry" "$COORD" \
+  "$(bash_call 'playbook-registry.sh show coordinator')" "${flow_c[@]}"
+expect_allow "flow: candidate C may read files" "$COORD" "$(tool_call Read '{"file_path":"/repo/a"}')" "${flow_c[@]}"
+expect_allow "flow: candidate C may watch a PR" "$COORD" \
+  "$(tool_call mcp__t3-code__watch_pull_request '{"number":1}')" "${flow_c[@]}"
+expect_allow "flow: candidate C may read a thread" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_read '{"threadId":"P"}')" "${flow_c[@]}"
+check "flow: C takes over from P atomically" as_thread "$flow" C takeover P M-FLOW
+check "flow: C is active at generation 2 with P as predecessor" \
+  jq -e '.C.state == "active" and .C.generation == 2 and .C.predecessor == "P"' "$flow"
+check "flow: P is retired and names C as successor" \
+  jq -e '.P.state == "retired" and .P.draining == true and .P.successor == "C"' "$flow"
+check "flow: replaying the takeover succeeds" as_thread "$flow" C takeover P M-FLOW
+check "flow: the replay keeps the generation" jq -e '.C.generation == 2' "$flow"
+refuses "flow: the retired P cannot abort after takeover" as_thread "$flow" P abort M-FLOW
+expect_deny "flow: retired P cannot dispatch" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot send messages" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_send '{"threadId":"C","prompt":"x"}')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot organize threads" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_organize '{"threadId":"C"}')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot launch threads" "$COORD" \
+  "$(tool_call mcp__t3-code__t3_thread_launch '{"prompt":"M-FLOW"}')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot schedule" "$COORD" \
+  "$(tool_call mcp__t3-code__schedule_task '{"schedule":{"type":"once"},"prompt":"M-FLOW"}')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot publish" "$COORD" "$(bash_call 'publish-broker publish x')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot run ordinary shell" "$COORD" "$(bash_call 'ls')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot drain again" "$COORD" \
+  "$(bash_call 'playbook-registry.sh drain M-X')" "${flow_p[@]}"
+expect_deny "flow: retired P cannot take over again" "$COORD" \
+  "$(bash_call 'playbook-registry.sh takeover C M-FLOW')" "${flow_p[@]}"
+expect_allow "flow: retired P may unwatch a PR" "$COORD" \
+  "$(tool_call mcp__t3-code__unwatch_pull_request '{"number":1}')" "${flow_p[@]}"
+expect_allow "flow: retired P may delete a scheduled task" "$COORD" \
+  "$(tool_call mcp__t3-code__delete_scheduled_task '{"id":"t1"}')" "${flow_p[@]}"
+expect_allow "flow: retired P may read its status" "$COORD" \
+  "$(bash_call 'playbook-registry.sh status P')" "${flow_p[@]}"
+expect_allow "flow: retired P may show the registry" "$COORD" \
+  "$(bash_call 'playbook-registry.sh show coordinator')" "${flow_p[@]}"
+expect_allow "flow: the new active C may dispatch" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" "${flow_c[@]}"
+expect_deny "flow: active C cannot remove the retired P" "$COORD" \
+  "$(bash_call 'playbook-registry.sh coordinator remove P')" "${flow_c[@]}"
+expect_allow "flow: active C may remove an entry that is not retired" "$COORD" \
+  "$(bash_call 'playbook-registry.sh coordinator remove Z')" "${flow_c[@]}"
+check "lock: no lock directory is left after the flow" test ! -e "$flow.lock"
+
+# Abort: the draining coordinator resumes, the candidate is retired and kept.
+ab=$tmp/abort.json
+check "abort: the operator registers Q" as_thread "$ab" operator coordinator add Q wave-q
+check "abort: Q drains under M-AB" as_thread "$ab" Q drain M-AB
+expect_allow "draining: coordinator may record --cancelled while draining" "$COORD" \
+  "$(bash_call 'playbook-registry.sh drain M-AB --cancelled')" PLAYBOOK_COORDINATOR_REGISTRY="$ab" T3CODE_THREAD_ID=Q
+check "abort: Q binds R as candidate" as_thread "$ab" Q bind-candidate R
+refuses "abort: a wrong marker is refused" as_thread "$ab" Q abort M-WRONG
+check "abort: the right marker restores Q" as_thread "$ab" Q abort M-AB
+check "abort: Q is active with no marker or candidate left" \
+  jq -e '.Q.state == "active" and .Q.draining == false and (.Q | has("handoff_marker") | not) and (.Q | has("candidate") | not)' "$ab"
+check "abort: the bound candidate is retired, not deleted" jq -e '.R.state == "retired" and .R.draining == true' "$ab"
+refuses "abort: the retired candidate cannot take over" as_thread "$ab" R takeover Q M-AB
+expect_allow "abort: Q dispatches again" "$COORD" "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" \
+  PLAYBOOK_COORDINATOR_REGISTRY="$ab" T3CODE_THREAD_ID=Q
+expect_deny "abort: the retired candidate R is inert" "$COORD" \
+  "$(tool_call mcp__t3-code__delegate_task '{"prompt":"x"}')" PLAYBOOK_COORDINATOR_REGISTRY="$ab" T3CODE_THREAD_ID=R
+
+# One owner per slice: a takeover is refused while another coordinator owns the slice.
+sl=$tmp/slice.json
+as_thread "$sl" operator coordinator add S-live wave-s
+as_thread "$sl" operator coordinator add S-old wave-s
+as_thread "$sl" S-old drain M-SL
+as_thread "$sl" S-old bind-candidate S-new
+refuses "takeover: refused while another coordinator owns the slice" as_thread "$sl" S-new takeover S-old M-SL
+check "takeover: the refused candidate stays a candidate" jq -e '.["S-new"].state == "candidate"' "$sl"
+
+# ── Worker registry, bound pushes and the inactive guards ─────────────
+wreg=$tmp/workers.json
+check "worker: add records the realpath and branch" \
+  env -i PATH="$PATH" HOME="$home" PLAYBOOK_WORKER_REGISTRY="$wreg" \
+  bash "$hooks/playbook-registry.sh" worker add w-1 "$wt" feature/x
+check "worker: the entry holds the worktree and branch" \
+  jq -e --arg wt "$(realpath "$wt")" '.["w-1"].worktree == $wt and .["w-1"].branch == "feature/x"' "$wreg"
+wreg_env=(PLAYBOOK_WORKER_REGISTRY="$wreg" T3CODE_THREAD_ID=w-1)
+expect_allow "worker (registry): edit inside the registered worktree" "$WORKER" \
+  "$(tool_call Edit "{\"file_path\":\"$wt/src/a.rs\"}")" "${wreg_env[@]}"
+expect_deny "worker (registry): edit outside the registered worktree" "$WORKER" \
+  "$(tool_call Edit "{\"file_path\":\"$out/x\"}")" "${wreg_env[@]}"
+expect_deny "worker (registry): the entry branch cannot push main" "$WORKER" \
+  "$(bash_call "git -C $wt push origin main")" "${wreg_env[@]}"
+expect_allow "worker (registry): the entry branch can be pushed" "$WORKER" \
+  "$(bash_call "git -C $wt push origin feature/x")" "${wreg_env[@]}"
+expect_deny "worker: the environment worktree wins over the registry entry" "$WORKER" \
+  "$(tool_call Edit "{\"file_path\":\"$wt/src/a.rs\"}")" "${wreg_env[@]}" PLAYBOOK_WORKER_WORKTREE="$wt_main"
+expect_deny "worker (bound main): pushing main is refused" "$WORKER" \
+  "$(bash_call 'git -C $PLAYBOOK_WORKER_WORKTREE push origin main')" \
+  PLAYBOOK_WORKER_WORKTREE="$wt_main" PLAYBOOK_WORKER_BRANCH=main
+expect_deny "worker (bound main): HEAD on main is refused" "$WORKER" \
+  "$(bash_call 'git -C $PLAYBOOK_WORKER_WORKTREE push origin HEAD')" \
+  PLAYBOOK_WORKER_WORKTREE="$wt_main" PLAYBOOK_WORKER_BRANCH=main
+expect_deny "worker (bound feature): a protected branch is refused even when it is the bound one" "$WORKER" \
+  "$(bash_call 'git -C $PLAYBOOK_WORKER_WORKTREE push origin feature/x')" \
+  PLAYBOOK_WORKER_WORKTREE="$wt" PLAYBOOK_WORKER_BRANCH=feature/x PLAYBOOK_PROTECTED_BRANCHES="feature/x main"
+open_stdin_guard "$WORKER" PLAYBOOK_WORKER_REGISTRY="$wreg" T3CODE_THREAD_ID=unlisted
+if [ "$RC" -eq 0 ]; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: worker: an inactive guard must exit before reading stdin (rc $RC)"
+fi
+open_stdin_guard "$COORD" PLAYBOOK_COORDINATOR_REGISTRY="$tmp/coordinators.json" T3CODE_THREAD_ID=someone-else
+if [ "$RC" -eq 0 ]; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: coord: an unlisted thread must exit before reading stdin (rc $RC)"
+fi
+
+# ── Review snapshots: base/, removal and cleanup ───────────────────────
+root_b=$(registry bash "$hooks/playbook-registry.sh" review snapshot --with-base rev-base "$src" "$snap_base" "$snap_head" 2>"$tmp/check-err") || root_b=""
+check "snapshot --with-base: built and registered" test -n "$root_b"
+check "snapshot --with-base: tree/ holds the head commit" grep -qx two "$root_b/tree/a.txt"
+check "snapshot --with-base: base/ holds the base commit" grep -qx one "$root_b/base/a.txt"
+check "snapshot --with-base: the registry names the one root" \
+  jq -e --arg r "$root_b" '.["rev-base"].snapshot_root == $r and (.["rev-base"].package_id | length > 0)' "$reviews_reg"
+expect_allow "reviewer: reads tree/ under the same root" "$REVIEWER" \
+  "$(tool_call Read "{\"file_path\":\"$root_b/tree/a.txt\"}")" "${regenv[@]}" T3CODE_THREAD_ID=rev-base
+expect_allow "reviewer: reads base/ under the same root" "$REVIEWER" \
+  "$(tool_call Read "{\"file_path\":\"$root_b/base/a.txt\"}")" "${regenv[@]}" T3CODE_THREAD_ID=rev-base
+expect_deny "reviewer: base/ does not widen the root" "$REVIEWER" \
+  "$(tool_call Read "{\"file_path\":\"$root_b/../outside/x\"}")" "${regenv[@]}" T3CODE_THREAD_ID=rev-base
+
+git clone -q --bare "$src" "$tmp/remote.git"
+root_f=$(registry bash "$hooks/playbook-registry.sh" review snapshot --fetch "$tmp/remote.git" main rev-fetch "$src" "$snap_base" "$snap_head" 2>"$tmp/check-err") || root_f=""
+check "snapshot --fetch: fetches the ref, then builds the snapshot" test -f "$root_f/tree/a.txt"
+check "review remove: unregisters the --fetch snapshot" registry bash "$hooks/playbook-registry.sh" review remove rev-fetch
+check "review remove: deletes the --fetch snapshot files" test ! -e "$root_f"
+
+mkdir -p "$tmp/keep"
+check "review add: a plain directory is registered" registry bash "$hooks/playbook-registry.sh" review add rev-keep "$tmp/keep"
+check "review remove: a plain directory is left alone" registry bash "$hooks/playbook-registry.sh" review remove rev-keep
+check "review remove: the plain directory still exists" test -d "$tmp/keep"
+
+mkdir -p "$tmp/mismatch"
+echo 'package_id=someone-else' >"$tmp/mismatch/.playbook-snapshot"
+jq --arg r "$tmp/mismatch" '. + {"rev-mm": {snapshot_root: $r, package_id: "expected"}}' "$reviews_reg" >"$tmp/rv.json" \
+  && mv -f -- "$tmp/rv.json" "$reviews_reg"
+check "review remove: a snapshot with another package id is left alone" \
+  registry bash "$hooks/playbook-registry.sh" review remove rev-mm
+check "review remove: the mismatched snapshot still exists" test -f "$tmp/mismatch/.playbook-snapshot"
+
+check "review remove: unregisters the --with-base snapshot" registry bash "$hooks/playbook-registry.sh" review remove rev-base
+check "review remove: deletes the --with-base snapshot" test ! -e "$root_b"
+
+gl=$tmp/gitlink-src
+mkdir -p "$gl"
+git -C "$gl" init -q -b main
+git -C "$gl" config user.name fixture
+git -C "$gl" config user.email fixture@example.invalid
+git -C "$gl" config commit.gpgsign false
+echo one >"$gl/a.txt"
+git -C "$gl" add -A
+git -C "$gl" commit -qm base
+gl_base=$(git -C "$gl" rev-parse HEAD)
+git -C "$gl" update-index --add --cacheinfo "160000,$(printf 'a%.0s' {1..40}),vendor"
+git -C "$gl" commit -qm 'add submodule'
+gl_head=$(git -C "$gl" rev-parse HEAD)
+mkdir -p "$tmp/snaptmp"
+refuses "snapshot: a submodule is refused" registry TMPDIR="$tmp/snaptmp" bash "$hooks/playbook-registry.sh" \
+  review snapshot rev-gl "$gl" "$gl_base" "$gl_head"
+check "snapshot: the refusal names the submodule" grep -q submodule "$tmp/refuse-err"
+check "snapshot: a refused snapshot leaves nothing behind" test -z "$(ls -A "$tmp/snaptmp")"
+check "snapshot: a refused snapshot is not registered" jq -e 'has("rev-gl") | not' "$reviews_reg"
+
 # ── Summary ────────────────────────────────────────────────────────────
 echo "test-hooks: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
