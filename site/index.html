@@ -59,7 +59,7 @@
       <div class="term__bar" aria-hidden="true"><span></span><span></span><span></span></div>
       <p class="sr-only" id="term-h">Terminal output of the hook test suite at this commit</p>
       <pre class="term__body"><span class="prompt">$</span> bash hooks/tests/test-hooks.sh
-test-hooks: 266 passed, 0 failed</pre>
+test-hooks: 388 passed, 0 failed</pre>
     </figure>
   </div>
 </section>
@@ -105,7 +105,7 @@ test-hooks: 266 passed, 0 failed</pre>
         </article>
         <article class="card">
           <h3><code>hooks/</code></h3>
-          <p>Bash guards for the coordinator, worker and reviewer roles, a shared <code>guard-lib.sh</code>, <code>playbook-registry.sh</code>, which writes the guard registries and builds review snapshots, and <code>tests/test-hooks.sh</code>.</p>
+          <p>Bash guards for the coordinator, worker and reviewer roles, a shared <code>guard-lib.sh</code>, <code>playbook-registry.sh</code>, which writes the guard registries and builds review snapshots, and <code>tests/test-hooks.sh</code> plus <code>tests/lint-skills.sh</code>.</p>
         </article>
         <article class="card">
           <h3><code>docs/</code></h3>
@@ -339,15 +339,15 @@ test-hooks: 266 passed, 0 failed</pre>
         <tbody>
           <tr>
             <th scope="row" data-label="Role">Coordinator</th>
-            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create and comment, GET-only <code>gh api</code>, the publish broker, <code>playbook-registry.sh</code> except removing itself</td>
-            <td data-label="Denies">Repo writes, builds, tests, mutating git, merges by CLI or forge tool, wait loops, new dispatches while draining</td>
+            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create and comment, GET-only <code>gh api</code>, the publish broker (status only while draining), <code>playbook-registry.sh</code> except removing itself or a retired entry</td>
+            <td data-label="Denies">Repo writes, builds, tests, mutating git, merges by CLI or forge tool, wait loops, dispatches while draining or as a <code>candidate</code>, and everything except teardown/reads once <code>retired</code></td>
             <td data-label="Active when">The thread id (<code>PLAYBOOK_THREAD_ID</code>, else <code>T3CODE_THREAD_ID</code>) is listed in the coordinator registry</td>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Worker</th>
-            <td data-label="Allows">Writes inside its own worktree; pushes only to <code>PLAYBOOK_WORKER_BRANCH</code> when it is set</td>
-            <td data-label="Denies">Writes outside the worktree; pushes to protected branches (<code>PLAYBOOK_PROTECTED_BRANCHES</code>, default <code>main master develop</code>)</td>
-            <td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set</td>
+            <td data-label="Allows">Writes inside its own worktree; pushes only to <code>PLAYBOOK_WORKER_BRANCH</code> (or its registered branch) when set</td>
+            <td data-label="Denies">Writes outside the worktree; pushes to protected branches (<code>PLAYBOOK_PROTECTED_BRANCHES</code>, default <code>main master develop</code>), even if bound to one</td>
+            <td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set, or the thread id is listed in the worker registry</td>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Reviewer</th>
@@ -376,7 +376,7 @@ worker-guard: Edit may only write inside the worktree (&lt;worktree&gt;); refuse
 reviewer-guard: Bash is not allowed for independent reviewers; only Read, Grep and Glob inside the snapshot</code></pre>
     </div>
 
-    <p class="note measure">The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary. The hard boundaries are the credential and publishing boundaries of Tier 2. The suite in <code>hooks/tests/test-hooks.sh</code> passes at this commit: 266 checks, 0 failed.</p>
+    <p class="note measure">The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary. The hard boundaries are the credential and publishing boundaries of Tier 2. The suite in <code>hooks/tests/test-hooks.sh</code> passes at this commit: 388 checks, 0 failed.</p>
   </div>
 </section>
 
@@ -407,15 +407,22 @@ in {
       </article>
       <article class="card">
         <h3>Without Nix</h3>
-        <p>Symlink the skills into your agent's skill directory. Reruns replace the loop's own links and skip anything else with the same name. Other agents read <code>~/.codex/skills/</code> or <code>~/.agents/skills/</code>.</p>
-<pre class="code"><code>dest=~/.claude/skills
+        <p>Symlink the skills into your agent's skill directory. Reruns replace only links that point into this checkout and skip everything else (real files or foreign links). Other agents read <code>~/.codex/skills/</code> or <code>~/.agents/skills/</code>.</p>
+<pre class="code"><code>src_root=$(readlink -f /path/to/agent-playbook)
+dest=~/.claude/skills
 mkdir -p "$dest"
-for s in /path/to/agent-playbook/skills/*/; do
-  name=$(basename "$s")
-  if [ -e "$dest/$name" ] && [ ! -L "$dest/$name" ]; then
-    echo "skip $name"; continue
+for s in "$src_root"/skills/*/; do
+  s=${s%/}; name=$(basename "$s"); link=$dest/$name
+  if [ -L "$link" ]; then
+    case $(readlink -f "$link") in
+      "$src_root"/*) ln -sfn "$s" "$link" ;;
+      *) echo "skip $name: foreign link" ;;
+    esac
+  elif [ -e "$link" ]; then
+    echo "skip $name: exists"
+  else
+    ln -s "$s" "$link"
   fi
-  ln -sfn "${s%/}" "$dest/$name"
 done</code></pre>
         <p>Register the three guards as <code>PreToolUse</code> hooks in <code>~/.claude/settings.json</code> or <code>~/.codex/hooks.json</code>; the README has both snippets.</p>
       </article>
@@ -427,12 +434,12 @@ done</code></pre>
         <thead><tr><th scope="col">Guard</th><th scope="col">Active when</th><th scope="col">Settings</th></tr></thead>
         <tbody>
           <tr><td data-label="Guard"><code>coordinator-guard.sh</code></td><td data-label="Active when">the thread id is in the coordinator registry</td><td data-label="Settings"><code>PLAYBOOK_COORDINATOR_REGISTRY</code> overrides the registry path</td></tr>
-          <tr><td data-label="Guard"><code>worker-guard.sh</code></td><td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set</td><td data-label="Settings"><code>PLAYBOOK_WORKER_BRANCH</code>, <code>PLAYBOOK_PROTECTED_BRANCHES</code></td></tr>
+          <tr><td data-label="Guard"><code>worker-guard.sh</code></td><td data-label="Active when"><code>PLAYBOOK_WORKER_WORKTREE</code> is set, or the thread id is in the worker registry</td><td data-label="Settings"><code>PLAYBOOK_WORKER_BRANCH</code>, <code>PLAYBOOK_PROTECTED_BRANCHES</code>, <code>PLAYBOOK_WORKER_REGISTRY</code></td></tr>
           <tr><td data-label="Guard"><code>reviewer-guard.sh</code></td><td data-label="Active when">the thread id is in the review registry with a <code>snapshot_root</code></td><td data-label="Settings"><code>PLAYBOOK_REVIEW_REGISTRY</code> overrides the registry path</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note measure">The thread id is <code>PLAYBOOK_THREAD_ID</code>, or <code>T3CODE_THREAD_ID</code> in T3 Code. Write the registries with <code>hooks/playbook-registry.sh</code>, never by hand. Check the kit with <code>bash hooks/tests/test-hooks.sh</code>.</p>
+    <p class="note measure">The thread id is <code>PLAYBOOK_THREAD_ID</code>, or <code>T3CODE_THREAD_ID</code> in T3 Code. Write the registries with <code>hooks/playbook-registry.sh</code>, never by hand. Check the kit with <code>bash hooks/tests/test-hooks.sh</code> and <code>bash hooks/tests/lint-skills.sh</code>.</p>
   </div>
 </section>
 
