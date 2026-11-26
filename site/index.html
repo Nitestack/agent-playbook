@@ -13,15 +13,20 @@
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#f6f5f1">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="assets/site.css">
-<!-- The hero words wait for the entrance; without script the page simply stands as written. -->
-<script>document.documentElement.classList.add('m-enter');setTimeout(function(){document.documentElement.classList.add('m-enter-done')},700)</script>
+<script>document.documentElement.classList.add('m-enter');setTimeout(function(){document.documentElement.classList.add('m-enter-done')},750)</script>
 </head>
 <body>
 <header class="nav">
   <div class="wrap nav__row">
     <a class="skip-link" href="#top">Skip to content</a>
-    <a class="nav__brand" href="#top" aria-label="agent-playbook, back to the top">agent-playbook</a>
+    <a class="nav__brand" href="#top" aria-label="agent-playbook, back to the top">
+      <span class="nav__brand-mark" aria-hidden="true">ap</span>
+      agent-playbook
+    </a>
     <nav aria-label="Sections">
       <ul class="nav__links">
         <li><a href="#tiers">Tiers</a></li>
@@ -34,44 +39,55 @@
     </nav>
     <a class="btn btn--primary nav__action" href="#adopt">Adopt it in a repo</a>
   </div>
+  <div class="nav__progress" aria-hidden="true"></div>
 </header>
 
 <main id="top">
 
-<!-- 1. Hero: what it is, one hard fact, the main action. Enters once on load. -->
-<section class="hero" style="--h: 1" data-enter aria-labelledby="hero-h">
+<!-- 1. Hero -->
+<section class="hero" id="hero" aria-labelledby="hero-h">
   <div class="wrap hero__grid">
-    <div class="hero__text hero-text">
-      <h1 id="hero-h" data-enter-item>agent-playbook: skills, templates and guard hooks for agent repos</h1>
-      <p class="hero__lead" data-enter-item>A portable kit of plain files. It holds ten workflow skills, templates that bootstrap a repo, three <code>PreToolUse</code> guard hooks and a frozen archive of the decisions behind them. The hooks need bash 4, jq, git and GNU coreutils, nothing else.</p>
+    <div class="hero__text">
+      <p class="eyebrow" data-enter-item><span class="eyebrow__dot" aria-hidden="true"></span>Plain files &middot; Apache-2.0 &middot; Nix optional</p>
+      <h1 id="hero-h" data-enter-item>Skills, templates and guard hooks for agent repos</h1>
+      <p class="hero__lead" data-enter-item>A portable kit of plain Markdown and bash: ten workflow skills, tier-by-tier repo templates, three <code>PreToolUse</code> guard hooks with in-place shift renewal, and a frozen decision archive.</p>
       <ul class="facts" data-enter-item aria-label="Repository facts">
         <li><strong>10</strong> workflow skills</li>
         <li><strong>3</strong> guard hooks</li>
-        <li><strong>2</strong> install paths: Nix or symlinks</li>
+        <li><strong>388</strong> hook checks passing</li>
       </ul>
       <div class="btn-row" data-enter-item>
         <a class="btn btn--primary" href="#adopt">Adopt it in a repo</a>
-        <a class="btn btn--secondary" href="https://github.com/Nitestack/agent-playbook/blob/main/docs/universal-blueprint.md">Read the blueprint</a>
+        <a class="btn btn--secondary" href="#guards">Try the guard simulator</a>
       </div>
     </div>
 
     <figure class="frame term" data-enter-item aria-labelledby="term-h">
-      <div class="term__bar" aria-hidden="true"><span></span><span></span><span></span></div>
-      <p class="sr-only" id="term-h">Terminal output of the hook test suite at this commit</p>
-      <pre class="term__body"><span class="prompt">$</span> bash hooks/tests/test-hooks.sh
-test-hooks: 388 passed, 0 failed</pre>
+      <div class="term__bar">
+        <div class="term__dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span class="term__title" id="term-h">agent-playbook &mdash; verify</span>
+        <div class="term__actions">
+          <button type="button" class="term__btn" data-term-replay>Replay</button>
+          <button type="button" class="term__btn" data-copy>Copy</button>
+        </div>
+      </div>
+      <pre class="term__body"><span class="term__line" data-term-line><span class="prompt">$</span> bash hooks/tests/test-hooks.sh</span>
+<span class="term__line term__line--ok" data-term-line>test-hooks: 388 passed, 0 failed</span>
+<span class="term__line" data-term-line><span class="prompt">$</span> bash hooks/tests/lint-skills.sh</span>
+<span class="term__line term__line--ok" data-term-line>skill lint: ok (10 skills)</span>
+<span class="term__line term__line--muted" data-term-line><span class="prompt">$</span> hooks/playbook-registry.sh status <span class="cursor" aria-hidden="true"></span></span></pre>
     </figure>
   </div>
 </section>
 
-<!-- 2. What it is and who it is for. -->
-<section class="section" style="--h: 1" id="what" aria-labelledby="what-h">
-  <div class="wrap">
+<!-- 2. What it is and who it is for -->
+<section class="section" id="what" aria-labelledby="what-h">
+  <div class="wrap" data-reveal>
     <h2 id="what-h">What agent-playbook is, and who it is for</h2>
     <div class="split">
       <div class="measure">
-        <p>agent-playbook is a set of plain files that tell a coding agent how to work in a repository: how to take an issue to a pull request, how to coordinate several agents, and how to review and publish their work. Other agents read their own skill directories, so the same files can be linked into them.</p>
-        <p>It is for people who run agents in git repositories and want their rules written down, reviewed and versioned.</p>
+        <p>agent-playbook is a set of plain files that tell a coding agent how to work in a repository: how to take an issue to a pull request, how to coordinate parallel workers, and how to review and publish their work. Other agents read their own skill directories, so the same files link straight into them.</p>
+        <p>It is for people who run agents in git repositories and want their rules written down, mechanically guarded, and versioned.</p>
         <h3>Who it is for, by tier</h3>
         <ul class="rules">
           <li><strong>A solo or quick repo:</strong> Tier 0.</li>
@@ -82,18 +98,18 @@ test-hooks: 388 passed, 0 failed</pre>
       <div class="stack">
         <h3>What it is not</h3>
         <ul class="rules">
-          <li>Not a sandbox. The guards stop a well-meaning agent from drifting. The README and the blueprint both say they are not a defense against a determined adversary.</li>
-          <li>Not a runtime. Nothing in the repository launches an agent or a worker.</li>
-          <li>Not a substitute for a repo's own <code>AGENTS.md</code>. The templates ask each repo to keep only the rules the code cannot show.</li>
+          <li>Not a sandbox. The guards stop a well-meaning agent from drifting. Hard security boundaries live in Tier 2 credentials and brokered publishing.</li>
+          <li>Not a runtime. Nothing in the repository launches an agent or a daemon.</li>
+          <li>Not a substitute for a repo's own <code>AGENTS.md</code>. Keep only the rules the code cannot show.</li>
         </ul>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 3. Repository structure. -->
-<section class="section" style="--h: 1" id="structure" aria-labelledby="structure-h">
-  <div class="wrap">
+<!-- 3. Repository structure -->
+<section class="section" id="structure" aria-labelledby="structure-h">
+  <div class="wrap" data-reveal>
     <h2 id="structure-h">What the repository holds</h2>
     <p class="lead measure">Six top-level parts. Each one has a single job; the blueprint and the README say which file does what.</p>
     <div class="tree" role="group" aria-label="Repository layout">
@@ -105,7 +121,7 @@ test-hooks: 388 passed, 0 failed</pre>
         </article>
         <article class="card">
           <h3><code>hooks/</code></h3>
-          <p>Bash guards for the coordinator, worker and reviewer roles, a shared <code>guard-lib.sh</code>, <code>playbook-registry.sh</code>, which writes the guard registries and builds review snapshots, and <code>tests/test-hooks.sh</code> plus <code>tests/lint-skills.sh</code>.</p>
+          <p>Bash guards for coordinator, worker and reviewer roles, <code>guard-lib.sh</code>, <code>playbook-registry.sh</code> (lifecycle, worker registry, review snapshots), <code>tests/test-hooks.sh</code> and <code>tests/lint-skills.sh</code>.</p>
         </article>
         <article class="card">
           <h3><code>docs/</code></h3>
@@ -113,25 +129,24 @@ test-hooks: 388 passed, 0 failed</pre>
         </article>
         <article class="card">
           <h3><code>.github/</code></h3>
-          <p><code>workflows/ci.yml</code> runs the hook tests, <code>shellcheck</code> and a skill lint: regular Markdown files only, closed frontmatter, names match their directories and are unique, named references exist.</p>
+          <p><code>workflows/ci.yml</code> runs the hook tests, <code>shellcheck</code> and <code>hooks/tests/lint-skills.sh</code>: Markdown-only skills, closed frontmatter, unique names, valid references.</p>
         </article>
         <article class="card">
           <h3>Root files</h3>
-          <p><code>README.md</code> for users, <code>AGENTS.md</code> for working on this repository, <code>CLAUDE.md</code>, which only points to <code>AGENTS.md</code>, and the Apache-2.0 <code>LICENSE</code>.</p>
+          <p><code>README.md</code> for users (including host tool mappings), <code>AGENTS.md</code> for repo rules, <code>CLAUDE.md</code>, and Apache-2.0 <code>LICENSE</code>.</p>
         </article>
         <article class="card">
           <h3><code>site/</code></h3>
-          <p>This overview page: one HTML file, one stylesheet, one small script. Nothing is loaded from another host.</p>
+          <p>This overview page: one HTML file, one stylesheet, one vanilla JS script. No build step, no tracking.</p>
         </article>
       </div>
     </div>
-    <p class="measure note">The blueprint has six parts: a global skill baseline, shift-based orchestration, independent review, publishing (Tier 2), host admission and containment, and a lean host configuration switch.</p>
   </div>
 </section>
 
-<!-- 4. Tiers: adopt in order. -->
-<section class="section" style="--h: 1" id="tiers" aria-labelledby="tiers-h">
-  <div class="wrap">
+<!-- 4. Tiers -->
+<section class="section" id="tiers" aria-labelledby="tiers-h">
+  <div class="wrap" data-reveal>
     <h2 id="tiers-h">Three tiers, adopted in order</h2>
     <p class="lead measure">Move to the next tier only when its trigger is real. Each tier keeps everything below it.</p>
     <ol class="ladder" aria-label="The three tiers, in the order to adopt them">
@@ -143,46 +158,46 @@ test-hooks: 388 passed, 0 failed</pre>
       <li class="ladder__step" data-level="1">
         <p class="ladder__name">Tier 1: active product repo</p>
         <p class="ladder__trigger">Trigger: two or more agents work in parallel, UI changes need browser checks, or a defect escaped review.</p>
-        <p class="ladder__adds">Adds: a shift-based orchestrator, the coordinator, worker and reviewer guards, <code>blind-review</code>, and <code>browser-verify</code> for UI repos.</p>
+        <p class="ladder__adds">Adds: a shift-based orchestrator with in-place renewal, coordinator, worker and reviewer guards, <code>blind-review</code>, and <code>browser-verify</code>.</p>
       </li>
       <li class="ladder__step" data-level="2">
         <p class="ladder__name">Tier 2: multi-host publishing</p>
         <p class="ladder__trigger">Trigger: several hosts write code that lands on a protected branch.</p>
-        <p class="ladder__adds">Adds: brokered publishing, so workers hold no push credentials; an owner gate for policy paths; per-host admission control.</p>
+        <p class="ladder__adds">Adds: brokered publishing (workers hold no push credentials), an owner gate for policy paths, and per-host admission control.</p>
       </li>
     </ol>
-    <p class="note measure">Each tier keeps the one before it. The <code>bootstrap-repo</code> skill reads only the templates for the tier it is applying.</p>
+    <p class="note measure">The <code>bootstrap-repo</code> skill reads only the templates for the tier it is applying.</p>
   </div>
 </section>
 
-<!-- 5. Shift and loop workflow. Dealt moment: the wakeup ring pulses. -->
-<section class="section section--loop" style="--h: 2" id="workflow" aria-labelledby="workflow-h">
-  <div class="wrap">
+<!-- 5. Shift & interactive wakeup loop -->
+<section class="section section--loop" id="workflow" aria-labelledby="workflow-h">
+  <div class="wrap" data-reveal>
     <h2 id="workflow-h">One shift runs one milestone slice</h2>
-    <div class="split split--loop">
+    <div class="split">
       <div class="measure">
-        <p class="lead">An orchestrator is a dispatcher: it splits and routes the work. One thread equals one shift, and a shift covers one milestone slice. It never becomes a forever-thread.</p>
-        <h3>A shift rotates when a trigger fires</h3>
+        <p class="lead">An orchestrator is a dispatcher: it splits and routes work. One thread equals one shift, and a shift renews proactively so context never rots.</p>
+        <h3>A shift renews or rotates when a trigger fires</h3>
         <ul class="rules">
           <li><code>compactions &gt;= 2</code></li>
           <li><code>dispatches_in_shift &gt;= 40</code></li>
-          <li><code>shift_age &gt;= 6h</code></li>
+          <li><code>shift_age &gt;= 6h</code> (<code>playbook-registry.sh status</code> reports <code>ROTATE_DUE</code>)</li>
           <li>the milestone slice is complete</li>
         </ul>
-        <h3>Rotation renews in place, or drains and hands off</h3>
+        <h3>In-place renewal first, fenced rotation as fallback</h3>
         <ol class="steps">
-          <li><strong>Renew in place (default).</strong> The coordinator runs <code>playbook-registry.sh renew</code> and continues in a fresh context. Its thread id, guard, watches and heartbeat carry over.</li>
-          <li><strong>Or hand off to a new thread.</strong> <code>playbook-registry.sh drain &lt;marker&gt;</code> freezes dispatch. Drain for up to 15 minutes, then cancel what is left and bump the shift generation.</li>
-          <li><strong>Stop after two forced rotations.</strong> A rotation that had to cancel children counts once, however many it cancelled. After the second, the shift stops rotating and escalates to the owner. It never starts a third.</li>
-          <li><strong>Fenced takeover.</strong> The successor launches idle, is bound as a <code>candidate</code>, recovers, attaches its watches and acknowledges. <code>takeover</code> then makes it the coordinator and marks the predecessor <code>retired</code>, never removing its guard. A failure before takeover runs <code>abort</code>.</li>
+          <li><strong>Renew in place (default).</strong> Run <code>playbook-registry.sh renew</code> and refresh the thread in a fresh context (<code>freshContext</code> or <code>/clear</code>). The thread ID, guard, watches, heartbeat and live child callbacks stay intact.</li>
+          <li><strong>Freeze and drain (fallback).</strong> When the thread ID must change, run <code>playbook-registry.sh drain &lt;marker&gt;</code>, wait up to 15 minutes, cancel what is left and record <code>--cancelled</code>. After two forced rotations, escalate to the owner.</li>
+          <li><strong>Bind an idle candidate.</strong> Launch the successor idle, bind it with <code>bind-candidate</code> (dispatch disabled), and send the compact handoff packet.</li>
+          <li><strong>Atomic takeover.</strong> After the successor recovers state and attaches its watches, <code>takeover</code> promotes it and sets the predecessor to <code>state: "retired"</code> so its guard keeps running. On failure before takeover, <code>abort</code> resumes the shift.</li>
         </ol>
       </div>
 
       <figure class="loop-figure">
         <div class="loop-figure__stage">
           <svg class="loop" viewBox="0 0 440 340" role="img" aria-labelledby="loop-t loop-d">
-            <title id="loop-t">The wakeup loop, in five steps</title>
-            <desc id="loop-d">Five steps in a ring: verify completions, advance PRs, refill slots, hygiene, then stop the turn. The ring returns to the first step on every wakeup.</desc>
+            <title id="loop-t">Interactive wakeup loop, in five steps</title>
+            <desc id="loop-d">Five clickable steps in a ring: verify completions, advance PRs, refill slots, hygiene, then stop the turn.</desc>
             <path class="loop__track" d="M220 52 A118 118 0 0 1 332 124" />
             <path class="loop__track" d="M332 124 A118 118 0 0 1 287 252" />
             <path class="loop__track" d="M287 252 A118 118 0 0 1 153 252" />
@@ -193,143 +208,156 @@ test-hooks: 388 passed, 0 failed</pre>
             <path class="loop__pulse loop__pulse--3" d="M287 252 A118 118 0 0 1 153 252" />
             <path class="loop__pulse loop__pulse--4" d="M153 252 A118 118 0 0 1 108 124" />
             <path class="loop__pulse loop__pulse--5" d="M108 124 A118 118 0 0 1 220 52" />
-            <g class="loop__node">
+            <g class="loop__node" data-loop-step="1" tabindex="0" role="button" aria-label="Step 1: Verify completions">
               <circle cx="220" cy="52" r="40" /><text x="220" y="48">1</text><text x="220" y="66">Verify</text>
             </g>
-            <g class="loop__node">
+            <g class="loop__node" data-loop-step="2" tabindex="0" role="button" aria-label="Step 2: Advance PRs">
               <circle cx="332" cy="124" r="40" /><text x="332" y="120">2</text><text x="332" y="138">Advance</text>
             </g>
-            <g class="loop__node">
+            <g class="loop__node" data-loop-step="3" tabindex="0" role="button" aria-label="Step 3: Refill slots">
               <circle cx="287" cy="252" r="40" /><text x="287" y="248">3</text><text x="287" y="266">Refill</text>
             </g>
-            <g class="loop__node">
+            <g class="loop__node" data-loop-step="4" tabindex="0" role="button" aria-label="Step 4: Hygiene">
               <circle cx="153" cy="252" r="40" /><text x="153" y="248">4</text><text x="153" y="266">Hygiene</text>
             </g>
-            <g class="loop__node">
+            <g class="loop__node" data-loop-step="5" tabindex="0" role="button" aria-label="Step 5: Stop the turn">
               <circle cx="108" cy="124" r="40" /><text x="108" y="120">5</text><text x="108" y="138">Stop</text>
             </g>
             <text class="loop__centre" x="220" y="168">wakeup</text>
           </svg>
         </div>
         <div class="loop-figure__controls">
-          <button type="button" class="pause" data-loop-toggle aria-pressed="false">Pause the animation</button>
+          <button type="button" class="pause" data-loop-toggle aria-pressed="false">Pause animation</button>
         </div>
+        <p class="loop-figure__hint">Click any node in the ring or a step below to inspect the pass.</p>
       </figure>
     </div>
 
-    <div class="wakeup measure">
+    <div class="wakeup">
       <h3>Each wakeup runs one pass, then ends the turn</h3>
-      <ol class="steps">
-        <li><strong>Verify completions</strong> by exact PR, branch and SHA.</li>
-        <li><strong>Advance PRs:</strong> build a review snapshot and send green work to <code>blind-review</code>, route fixes to <code>rebase-and-fix</code>, hand work with approval evidence to <code>publish-pr</code>.</li>
-        <li><strong>Refill slots</strong> with the next ready ticket.</li>
-        <li><strong>Hygiene:</strong> settle finished children; clean up only confirmed merges.</li>
-        <li><strong>Stop the turn.</strong> Children and publish jobs run on their own.</li>
+      <ol class="steps steps--interactive">
+        <li data-wakeup-step="1"><strong>Verify completions</strong> by exact PR, branch and 40-char SHA. Never claim done from memory.</li>
+        <li data-wakeup-step="2"><strong>Advance PRs:</strong> build a blob-exact review snapshot (<code>review snapshot</code>) for <code>blind-review</code>, route fixes to <code>rebase-and-fix</code>, hand approved green work to the operator or <code>publish-pr</code>.</li>
+        <li data-wakeup-step="3"><strong>Refill slots</strong> immediately with the next ready ticket using <code>ticket-implement</code>.</li>
+        <li data-wakeup-step="4"><strong>Hygiene &amp; check rotation:</strong> settle finished children, route <code>safe-cleanup</code> for confirmed merges, and check <code>playbook-registry.sh status</code> for <code>ROTATE_DUE</code>.</li>
+        <li data-wakeup-step="5"><strong>Stop the turn.</strong> Never wait in a loop; children, watches and the 20-minute heartbeat wake the shift.</li>
       </ol>
     </div>
   </div>
 </section>
 
-<!-- 6. The path of one PR. -->
-<section class="section" style="--h: 1" id="pr-path" aria-labelledby="pr-h">
-  <div class="wrap">
+<!-- 6. The path of one PR -->
+<section class="section" id="pr-path" aria-labelledby="pr-h">
+  <div class="wrap" data-reveal>
     <h2 id="pr-h">From one issue to a merged PR</h2>
     <p class="lead measure">Each stage hands over an exact tuple: a PR, a base commit and a head commit. A verdict counts only for the tuple it names.</p>
     <ol class="path" aria-label="Path of one pull request">
-      <li class="path__step"><span class="path__name">ticket-implement</span><span class="path__note">one issue, one PR, exact SHAs</span></li>
-      <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">fresh, read-only, one tuple</span></li>
+      <li class="path__step"><span class="path__name">ticket-implement</span><span class="path__note">one issue, one PR, exact SHAs (or <code>ALREADY_SATISFIED</code>)</span></li>
+      <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">fresh, read-only, one immutable snapshot</span></li>
       <li class="path__step path__step--accent"><span class="path__name">publish-pr</span><span class="path__note">approval evidence and green CI: exact-SHA fast-forward</span></li>
-      <li class="path__step"><span class="path__name">safe-cleanup</span><span class="path__note">merged work only</span></li>
+      <li class="path__step"><span class="path__name">safe-cleanup</span><span class="path__note">exact-tip verified, merged work only</span></li>
     </ol>
     <div class="path-back">
       <p class="path-back__label">REQUEST_CHANGES from blind-review, or NEEDS_REBASE from publish-pr:</p>
       <ol class="path path--back">
-        <li class="path__step"><span class="path__name">rebase-and-fix</span><span class="path__note">classify the change, push with a lease (Tier 2: hand off to the publisher)</span></li>
+        <li class="path__step"><span class="path__name">rebase-and-fix</span><span class="path__note">FULL-first 3-outcome classifier, push with a lease (Tier 2: hand off to the publisher)</span></li>
         <li class="path__step"><span class="path__name">blind-review</span><span class="path__note">the review the classification asks for, on the new tuple</span></li>
       </ol>
     </div>
     <ul class="pr-notes measure">
-      <li><strong>Publishing never rewrites reviewed commits.</strong> <code>publish-pr</code> pushes with a lease on the expected base and confirms the PR is <code>MERGED</code> at the exact head.</li>
-      <li><strong>A moved base is not rebased during publish.</strong> The PR goes to <code>rebase-and-fix</code> instead, and the queue keeps moving.</li>
+      <li><strong>Publishing never rewrites reviewed commits.</strong> <code>publish-pr</code> pushes with a lease on the expected base and confirms <code>MERGED</code> at the exact head.</li>
+      <li><strong>A moved base is not rebased during publish.</strong> The PR routes to <code>rebase-and-fix</code> and the rest of the queue keeps moving.</li>
     </ul>
   </div>
 </section>
 
-<!-- 7. Skills, group one. -->
-<section class="section" style="--h: 1" id="skills-run" aria-labelledby="skills-run-h">
-  <div class="wrap">
-    <h2 id="skills-run-h">Skills that run work and fix it</h2>
-    <p class="lead measure">Four skills. Each folder holds one <code>SKILL.md</code>; the link opens the file.</p>
-    <div class="cards cards--4">
-      <article class="card card--link">
+<!-- 7. Skills (filterable) -->
+<section class="section" id="skills-run" aria-labelledby="skills-run-h">
+  <div class="wrap" data-reveal>
+    <h2 id="skills-run-h">Ten workflow skills, Markdown only</h2>
+    <p class="lead measure">Every skill is a single lean <code>SKILL.md</code> written in tool-neutral English. Filter by role or open any skill straight on GitHub.</p>
+
+    <div class="filter-bar" role="group" aria-label="Filter skills by role">
+      <button type="button" class="pill" data-skill-filter="all" aria-pressed="true">All (10)</button>
+      <button type="button" class="pill" data-skill-filter="orchestrator" aria-pressed="false">Orchestrator</button>
+      <button type="button" class="pill" data-skill-filter="worker" aria-pressed="false">Worker</button>
+      <button type="button" class="pill" data-skill-filter="reviewer" aria-pressed="false">Reviewer &amp; QA</button>
+      <button type="button" class="pill" data-skill-filter="ops" aria-pressed="false">Publish &amp; Ops</button>
+      <span class="note" style="margin:0 0 0 auto;" data-skill-count aria-live="polite">10 of 10 skills shown</span>
+    </div>
+
+    <div class="cards cards--3" id="skills-check">
+      <article class="card card--link" data-skill-role="orchestrator">
+        <span class="card__tag">Orchestrator</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/orchestrate/SKILL.md">orchestrate</a></h3>
-        <p>Run or take over an orchestrator shift for one milestone slice: split work, dispatch workers and reviewers, merge. No hands-on coding.</p>
-        <p class="use"><strong>Use when</strong> starting an orchestrator thread, taking over a rotated shift, or a shift hits a rotation trigger.</p>
+        <p>Run or renew an orchestrator shift for one milestone slice: unified startup, in-place renewal, fenced rotation fallback, and non-blocking routing.</p>
+        <p class="use"><strong>Use when</strong> starting a shift, renewing context, or taking over a rotated shift.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="worker">
+        <span class="card__tag">Worker</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/ticket-implement/SKILL.md">ticket-implement</a></h3>
-        <p>Implement one GitHub issue end to end in an isolated worktree: red-green TDD, foreground gate runs, signed linear commits, an exact-SHA PR.</p>
+        <p>Implement one issue end to end in an isolated worktree: red-green TDD, foreground gates, signed linear commits, exact-SHA PR or <code>ALREADY_SATISFIED</code>.</p>
         <p class="use"><strong>Use when</strong> the task is a single issue number, from pre-flight to pull request.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="ops">
+        <span class="card__tag">Bootstrap</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/bootstrap-repo/SKILL.md">bootstrap-repo</a></h3>
-        <p>Set up agent rails in a new or existing repository, tier by tier, and add repo-scoped stack skills.</p>
-        <p class="use"><strong>Use when</strong> equipping a repo for agents, adding <code>AGENTS.md</code> or <code>CLAUDE.md</code>, or adding project skills.</p>
+        <p>Equip a new or existing repo tier by tier using the templates in <code>references/</code>, plus repo-scoped stack skills.</p>
+        <p class="use"><strong>Use when</strong> adding <code>AGENTS.md</code>, <code>REVIEW.md</code>, or <code>docs/orchestration.md</code>.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="worker">
+        <span class="card__tag">Worker</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/rebase-and-fix/SKILL.md">rebase-and-fix</a></h3>
-        <p>Apply review fixes, resolve conflicts, renumber migrations and rebase onto a moved default branch. Then classify the change as <code>FULL_HEAD_RE_REVIEW</code>, <code>MECHANICAL_CARRY_FORWARD</code> or <code>DELTA_RE_REVIEW</code>.</p>
-        <p class="use"><strong>Use when</strong> a PR is <code>REQUEST_CHANGES</code>, reports <code>NEEDS_REBASE</code>, or conflicts with a moved base.</p>
+        <p>Apply review fixes, resolve conflicts, renumber migrations and rebase onto a moved base with the FULL-first 3-outcome classifier.</p>
+        <p class="use"><strong>Use when</strong> a PR is <code>REQUEST_CHANGES</code>, reports <code>NEEDS_REBASE</code>, or conflicts.</p>
       </article>
-    </div>
-  </div>
-</section>
-
-<!-- 8. Skills, group two. -->
-<section class="section" style="--h: 2" id="skills-check" aria-labelledby="skills-check-h">
-  <div class="wrap">
-    <h2 id="skills-check-h">Skills that review, verify and keep the repo clean</h2>
-    <p class="lead measure">Six skills, from the reviewer's verdict to the disk.</p>
-    <div class="cards cards--2">
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="reviewer">
+        <span class="card__tag">Reviewer</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/blind-review/SKILL.md">blind-review</a></h3>
-        <p>An anti-anchored review of one exact (PR, base, head) tuple, from a fresh read-only context over a snapshot with no <code>.git</code> directory.</p>
-        <p class="use"><strong>Use when</strong> a PR is green and needs a verdict, or a re-review must confirm a new head.</p>
+        <p>Anti-anchored review of one exact (PR, base, head) tuple from a fresh read-only context over a blob-exact, <code>.git</code>-free snapshot.</p>
+        <p class="use"><strong>Use when</strong> a PR is green and needs a verdict, or a new head needs re-review.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="reviewer orchestrator">
+        <span class="card__tag">Council</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/council-review/SKILL.md">council-review</a></h3>
-        <p>A council of cold, independent reviewers that discusses on a shared temporary board (blind round, then all-to-all replies, then consensus) and converges with evidence, for high-impact decisions.</p>
-        <p class="use"><strong>Use when</strong> an architecture, security boundary, policy or proposal change needs it. Not for routine PRs.</p>
+        <p>Cold, independent reviewers discuss on a shared temporary board (blind R1 &rarr; all-to-all R2 &rarr; consensus R3) and converge with evidence.</p>
+        <p class="use"><strong>Use when</strong> deciding major architecture, security boundary or policy shifts.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="reviewer worker">
+        <span class="card__tag">QA</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/browser-verify/SKILL.md">browser-verify</a></h3>
-        <p>Verify a UI change in a real browser against the exact candidate build: routes, console errors, network failures, focus and empty states.</p>
+        <p>Verify UI changes in a real browser against the exact candidate build SHA: routes, console errors, network failures, focus and empty states.</p>
         <p class="use"><strong>Use when</strong> a task changes web UI, layout, routing or client-side API behavior.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="ops">
+        <span class="card__tag">Publisher</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/publish-pr/SKILL.md">publish-pr</a></h3>
-        <p>Land one approved, green PR on the protected default branch by an exact-SHA compare-and-swap fast-forward. Then confirm it is <code>MERGED</code> and clean up.</p>
-        <p class="use"><strong>Use when</strong> a PR is approved and green, or a publish stopped because the default branch moved.</p>
+        <p>Land one approved, green PR by exact-SHA compare-and-swap fast-forward with intent reconciliation and exact-tuple verification.</p>
+        <p class="use"><strong>Use when</strong> a PR is approved and green, or stopped on a moved default branch.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="ops">
+        <span class="card__tag">Hygiene</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/safe-cleanup/SKILL.md">safe-cleanup</a></h3>
-        <p>Inventory and remove stale worktrees, merged branches and build caches. Sized and confirmed first; unmerged, dirty and live work is never touched.</p>
-        <p class="use"><strong>Use when</strong> disk space is low, worktrees pile up, or merged branches need removing.</p>
+        <p>Inventory and remove stale worktrees, merged branches and build caches with exact-tip verification, never touching unmerged or live work.</p>
+        <p class="use"><strong>Use when</strong> disk space is low, worktrees pile up, or PRs have merged.</p>
       </article>
-      <article class="card card--link">
+      <article class="card card--link" data-skill-role="orchestrator ops">
+        <span class="card__tag">Ops</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/session-miner/SKILL.md">session-miner</a></h3>
-        <p>Mine session transcripts, CI failures and review rounds for recurring friction, cluster the root causes and turn each into a mechanical fix.</p>
-        <p class="use"><strong>Use when</strong> a milestone or a multi-ticket run is over, or the same failure keeps coming back.</p>
+        <p>Mine session transcripts, CI failures and review rounds for recurring friction and turn each root cause into a sanitized mechanical fix.</p>
+        <p class="use"><strong>Use when</strong> a milestone ends or the same failure keeps coming back.</p>
       </article>
     </div>
   </div>
 </section>
 
-<!-- 9. Guards. Dark band: the one place the page changes ground. -->
-<section class="section section--dark" style="--h: 2" id="guards" aria-labelledby="guards-h">
-  <div class="wrap">
+<!-- 9. Guards: dark band + interactive simulator -->
+<section class="section section--dark" id="guards" aria-labelledby="guards-h">
+  <div class="wrap" data-reveal>
+    <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Mechanical guardrails &middot; Bash + jq</p>
     <h2 id="guards-h">Guard hooks: three roles, three sets of limits</h2>
-    <p class="lead measure">Each guard is a <code>PreToolUse</code> hook. It reads the tool call on stdin, exits 0 to allow it, or exits 2 with a reason to deny it.</p>
+    <p class="lead measure">Each guard is a <code>PreToolUse</code> hook. Inactive threads exit 0 before reading stdin; active threads get checked and receive actionable reasons on exit 2.</p>
+
     <div class="table-wrap">
       <table class="table">
         <caption class="sr-only">What each guard allows and denies</caption>
@@ -339,9 +367,9 @@ test-hooks: 388 passed, 0 failed</pre>
         <tbody>
           <tr>
             <th scope="row" data-label="Role">Coordinator</th>
-            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create and comment, GET-only <code>gh api</code>, the publish broker (status only while draining), <code>playbook-registry.sh</code> except removing itself or a retired entry</td>
+            <td data-label="Allows">Read tools, read-only git and <code>gh</code>, <code>gh issue</code> create/comment, GET-only <code>gh api</code>, publish broker (status only while draining), <code>playbook-registry.sh</code> except removing itself or a retired entry</td>
             <td data-label="Denies">Repo writes, builds, tests, mutating git, merges by CLI or forge tool, wait loops, dispatches while draining or as a <code>candidate</code>, and everything except teardown/reads once <code>retired</code></td>
-            <td data-label="Active when">The thread id (<code>PLAYBOOK_THREAD_ID</code>, else <code>T3CODE_THREAD_ID</code>) is listed in the coordinator registry</td>
+            <td data-label="Active when">Thread id (<code>PLAYBOOK_THREAD_ID</code>, else <code>T3CODE_THREAD_ID</code>) is in the coordinator registry</td>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Worker</th>
@@ -351,9 +379,9 @@ test-hooks: 388 passed, 0 failed</pre>
           </tr>
           <tr>
             <th scope="row" data-label="Role">Reviewer</th>
-            <td data-label="Allows">Claude Code's <code>Read</code>, <code>Grep</code> and <code>Glob</code> inside the review snapshot. Codex reviewers use Codex's read-only sandbox instead.</td>
-            <td data-label="Denies">Bash, write tools, MCP tools, web access, sub-agents, paths outside the snapshot</td>
-            <td data-label="Active when">The thread id is in the review registry and its entry names a <code>snapshot_root</code></td>
+            <td data-label="Allows">Claude Code's <code>Read</code>, <code>Grep</code> and <code>Glob</code> inside the review snapshot (including <code>base/</code> with <code>--with-base</code>). Codex reviewers use Codex's read-only sandbox.</td>
+            <td data-label="Denies">Bash, write tools, MCP tools, web access, sub-agents, paths or symlinks escaping the snapshot</td>
+            <td data-label="Active when">Thread id is in the review registry with a <code>snapshot_root</code></td>
           </tr>
         </tbody>
       </table>
@@ -361,40 +389,52 @@ test-hooks: 388 passed, 0 failed</pre>
 
     <ol class="guard-flow" aria-label="How a guard decides">
       <li class="guard-flow__step">A tool call arrives.</li>
-      <li class="guard-flow__step guard-flow__step--branch">The guard is not active for this thread? <span>Exit 0 at once: allowed, nothing read.</span></li>
-      <li class="guard-flow__step">The role's rules check the call.</li>
-      <li class="guard-flow__step guard-flow__step--no">Allowed: exit 0. Denied: the reason is printed, exit 2.</li>
+      <li class="guard-flow__step guard-flow__step--branch">Not active for this thread? <span>Exit 0 at once: allowed, stdin never read.</span></li>
+      <li class="guard-flow__step">Role &amp; lifecycle rules check the call.</li>
+      <li class="guard-flow__step guard-flow__step--no">Allowed: exit 0. Denied: reason printed, exit 2.</li>
     </ol>
 
-    <div class="split split--tight">
-      <div>
-        <h3>What a denial looks like</h3>
-        <p class="measure">A denial carries its reason back to the agent, which can then act on it. These are the messages the scripts build, with placeholders where a value varies.</p>
+    <!-- Interactive Guard Simulator -->
+    <div class="sim" aria-label="Interactive guard hook simulator">
+      <div class="sim__head">
+        <h3>Try the guards live</h3>
+        <div class="sim__tabs" role="tablist" aria-label="Choose a guard role">
+          <button type="button" class="sim__tab" role="tab" data-sim-role="coordinator" aria-selected="true">Coordinator</button>
+          <button type="button" class="sim__tab" role="tab" data-sim-role="worker" aria-selected="false">Worker</button>
+          <button type="button" class="sim__tab" role="tab" data-sim-role="reviewer" aria-selected="false">Reviewer</button>
+        </div>
       </div>
-      <pre class="code code--dark"><code>coordinator-guard: Edit is blocked for coordinators; delegate file changes to a worker.
-worker-guard: Edit may only write inside the worktree (&lt;worktree&gt;); refused: &lt;path&gt;
-reviewer-guard: Bash is not allowed for independent reviewers; only Read, Grep and Glob inside the snapshot</code></pre>
+      <div class="sim__scenarios" data-sim-scenarios role="group" aria-label="Choose a tool call to test"></div>
+      <div class="sim__out" data-sim-out aria-live="polite">
+        <div class="sim__meta">
+          <span class="badge badge--allow" data-sim-badge>EXIT 0 &middot; ALLOWED</span>
+          <span class="sim__cmd" data-sim-cmd></span>
+        </div>
+        <p class="sim__reason" data-sim-reason></p>
+      </div>
     </div>
 
-    <p class="note measure">The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary. The hard boundaries are the credential and publishing boundaries of Tier 2. The suite in <code>hooks/tests/test-hooks.sh</code> passes at this commit: 388 checks, 0 failed.</p>
+    <p class="note measure">The guards stop a well-meaning agent from drifting; hard security boundaries live in Tier 2. Verified by <code>hooks/tests/test-hooks.sh</code>: 388 checks, 0 failed.</p>
   </div>
 </section>
 
-<!-- 10. Setup. -->
-<section class="section" style="--h: 2" id="setup" aria-labelledby="setup-h">
-  <div class="wrap">
+<!-- 10. Setup + Interactive Registry CLI -->
+<section class="section" id="setup" aria-labelledby="setup-h">
+  <div class="wrap" data-reveal>
     <h2 id="setup-h">Set it up with Nix, or without</h2>
-    <p class="lead measure">Nix is optional. The skills and templates are Markdown. The hooks need bash 4 or newer, <code>jq</code>, <code>git</code> and GNU coreutils; on macOS install GNU coreutils first, or the BSD <code>realpath</code> makes the guards deny everything.</p>
-    <div class="cards cards--2">
+    <p class="lead measure">Nix is optional. The skills and templates are Markdown. The hooks need bash 4+, <code>jq</code>, <code>git</code> and GNU coreutils (on macOS, install GNU coreutils first).</p>
+    <div class="cards">
       <article class="card">
         <h3>With Nix and Home Manager</h3>
         <p>Add the playbook as a non-flake input, pass it to Home Manager, and link every skill:</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
 <pre class="code"><code>inputs.agent-playbook = {
   url = "github:Nitestack/agent-playbook";
   flake = false;
 };
 
-# A Home Manager module:
+# Home Manager module:
 { lib, agent-playbook, ... }:
 let skills = lib.filterAttrs (_: t: t == "directory")
   (builtins.readDir "${agent-playbook}/skills");
@@ -403,11 +443,14 @@ in {
     lib.nameValuePair ".claude/skills/${name}"
       { source = "${agent-playbook}/skills/${name}"; }) skills;
 }</code></pre>
-        <p>CI keeps <code>skills/</code> Markdown-only, so this deploys no scripts. Hook commands point at <code>${agent-playbook}/hooks/</code>.</p>
+        </div>
+        <p class="note" style="margin-top:var(--s-4);">CI keeps <code>skills/</code> Markdown-only, so this deploys no scripts. Hook commands point at <code>${agent-playbook}/hooks/</code>.</p>
       </article>
       <article class="card">
         <h3>Without Nix</h3>
-        <p>Symlink the skills into your agent's skill directory. Reruns replace only links that point into this checkout and skip everything else (real files or foreign links). Other agents read <code>~/.codex/skills/</code> or <code>~/.agents/skills/</code>.</p>
+        <p>Symlink the skills into your agent's skill directory. Reruns replace only links pointing into this checkout and skip real files or foreign links.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
 <pre class="code"><code>src_root=$(readlink -f /path/to/agent-playbook)
 dest=~/.claude/skills
 mkdir -p "$dest"
@@ -424,8 +467,62 @@ for s in "$src_root"/skills/*/; do
     ln -s "$s" "$link"
   fi
 done</code></pre>
-        <p>Register the three guards as <code>PreToolUse</code> hooks in <code>~/.claude/settings.json</code> or <code>~/.codex/hooks.json</code>; the README has both snippets.</p>
+        </div>
+        <p class="note" style="margin-top:var(--s-4);">Register the three guards in <code>~/.claude/settings.json</code> or <code>~/.codex/hooks.json</code>; the README has both snippets.</p>
       </article>
+    </div>
+
+    <!-- Interactive Registry CLI Quick Reference -->
+    <div class="cli-box">
+      <div class="cli-box__head">
+        <h3>Registry CLI quick reference</h3>
+        <div class="cli-box__tabs" role="tablist" aria-label="Registry workflows">
+          <button type="button" class="pill" role="tab" data-cli-tab="renew" aria-selected="true">In-place renew</button>
+          <button type="button" class="pill" role="tab" data-cli-tab="rotate" aria-selected="false">New-thread rotation</button>
+          <button type="button" class="pill" role="tab" data-cli-tab="review" aria-selected="false">Review snapshot</button>
+          <button type="button" class="pill" role="tab" data-cli-tab="worker" aria-selected="false">Worker registry</button>
+        </div>
+      </div>
+
+      <div class="cli-box__panel" data-cli-panel="renew">
+        <p class="cli-box__desc">Check shift age, bump generation in place, then refresh context (<code>freshContext</code> or <code>/clear</code>) without draining healthy workers.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
+<pre class="code"><code>hooks/playbook-registry.sh coordinator add &lt;thread-id&gt; [slice]
+hooks/playbook-registry.sh status
+hooks/playbook-registry.sh renew</code></pre>
+        </div>
+      </div>
+
+      <div class="cli-box__panel" data-cli-panel="rotate" hidden>
+        <p class="cli-box__desc">Fenced new-thread fallback: freeze dispatches, bind an idle candidate, atomically promote &amp; retire predecessor, or abort before takeover.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
+<pre class="code"><code>hooks/playbook-registry.sh drain &lt;handoff-marker&gt; [--cancelled]
+hooks/playbook-registry.sh bind-candidate &lt;successor-thread-id&gt;
+hooks/playbook-registry.sh takeover &lt;predecessor-thread-id&gt; &lt;handoff-marker&gt;
+hooks/playbook-registry.sh abort &lt;handoff-marker&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="cli-box__panel" data-cli-panel="review" hidden>
+        <p class="cli-box__desc">Build a blob-exact, read-only, <code>.git</code>-free snapshot (optionally bundling <code>base/</code> and fetching a remote ref), then tear it down after the verdict.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
+<pre class="code"><code>hooks/playbook-registry.sh review snapshot --with-base &lt;rev-tid&gt; &lt;repo&gt; &lt;base-oid&gt; &lt;head-oid&gt;
+hooks/playbook-registry.sh review remove &lt;rev-tid&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="cli-box__panel" data-cli-panel="worker" hidden>
+        <p class="cli-box__desc">Fallback activation for idle-launched worker threads when environment variables cannot be injected at launch.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
+<pre class="code"><code>hooks/playbook-registry.sh worker add &lt;worker-tid&gt; &lt;worktree&gt; [branch]
+hooks/playbook-registry.sh worker remove &lt;worker-tid&gt;
+hooks/playbook-registry.sh show worker</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -439,21 +536,21 @@ done</code></pre>
         </tbody>
       </table>
     </div>
-    <p class="note measure">The thread id is <code>PLAYBOOK_THREAD_ID</code>, or <code>T3CODE_THREAD_ID</code> in T3 Code. Write the registries with <code>hooks/playbook-registry.sh</code>, never by hand. Check the kit with <code>bash hooks/tests/test-hooks.sh</code> and <code>bash hooks/tests/lint-skills.sh</code>.</p>
+    <p class="note measure">The thread id is <code>PLAYBOOK_THREAD_ID</code>, or <code>T3CODE_THREAD_ID</code> in T3 Code. Check the kit with <code>bash hooks/tests/test-hooks.sh</code> and <code>bash hooks/tests/lint-skills.sh</code>.</p>
   </div>
 </section>
 
-<!-- 11. Archive. -->
-<section class="section" style="--h: 2" id="archive" aria-labelledby="archive-h">
-  <div class="wrap">
+<!-- 11. Archive -->
+<section class="section" id="archive" aria-labelledby="archive-h">
+  <div class="wrap" data-reveal>
     <h2 id="archive-h">The research archive, R1 to R15</h2>
     <p class="lead measure">The decisions behind the blueprint came from a fifteen-round council. Two reviewer panels scored each round for developer and agent experience, out of 10. The archive is frozen: grep the section you need, and do not read a file in full.</p>
     <ol class="rounds" aria-label="Council rounds grouped by phase">
-      <li><span class="rounds__id">R1 to R2</span><p>Live audits: the skill catalog, Git 2.56 <code>patch-id</code>, and a publish-script bug audit (P1 to P12).</p><p class="rounds__score">End scores, panel A and B, DX/AX: 7.5/7.0 and 7.0/6.5</p></li>
-      <li><span class="rounds__id">R3 to R6</span><p>Brokered publishing with no worker push tokens, the policy-path owner gate, and a bundle-based host switch.</p><p class="rounds__score">8.5/8.5 and 8.5/7.0</p></li>
-      <li><span class="rounds__id">R7 to R9</span><p>A static CI unit, Check Runs provenance, verified <code>OpenSSH 10.6p1</code> and <code>ast-grep 0.51.2</code> behavior, an isolated fences job.</p><p class="rounds__score">8.9/8.6 and 8.5/7.8</p></li>
-      <li><span class="rounds__id">R10 to R14</span><p>Diminishing returns: registration race conditions and multi-pointer crash states.</p><p class="rounds__score">9.6/9.6 and 9.3/8.9</p></li>
-      <li><span class="rounds__id">R15</span><p>The judge trimmed R10 to R15 over-engineering. The lean plan scored 9.4 DX and 9.3 AX.</p><p class="rounds__score">9.6/9.6 and 9.5/9.1</p></li>
+      <li><span class="rounds__id">R1 to R2</span><p>Live audits: the skill catalog, Git 2.56 <code>patch-id</code>, and a publish-script bug audit (P1 to P12).</p><p class="rounds__score">DX/AX: 7.5/7.0 &amp; 7.0/6.5</p></li>
+      <li><span class="rounds__id">R3 to R6</span><p>Brokered publishing with no worker push tokens, the policy-path owner gate, and a bundle-based host switch.</p><p class="rounds__score">8.5/8.5 &amp; 8.5/7.0</p></li>
+      <li><span class="rounds__id">R7 to R9</span><p>A static CI unit, Check Runs provenance, verified <code>OpenSSH 10.6p1</code> and <code>ast-grep 0.51.2</code> behavior, an isolated fences job.</p><p class="rounds__score">8.9/8.6 &amp; 8.5/7.8</p></li>
+      <li><span class="rounds__id">R10 to R14</span><p>Diminishing returns: registration race conditions and multi-pointer crash states.</p><p class="rounds__score">9.6/9.6 &amp; 9.3/8.9</p></li>
+      <li><span class="rounds__id">R15</span><p>The judge trimmed R10 to R15 over-engineering. The lean plan scored 9.4 DX and 9.3 AX.</p><p class="rounds__score">9.6/9.6 &amp; 9.5/9.1</p></li>
     </ol>
 
     <div class="split">
@@ -479,7 +576,7 @@ done</code></pre>
         <ul class="files">
           <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-research-evidence.md">Research evidence</a>: nine findings, one section each, with the tool version where one was recorded.</li>
           <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-council-decisions-r1-r15.md">Council decisions R1 to R15</a>: the scores, what each round changed, and what was kept and trimmed.</li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-full-specification-v15.md">Full specification v15</a>: a sanitized snapshot of the complete hardened design, including the optional local-CI fallback. Historical: the blueprint holds the current guidance.</li>
+          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-full-specification-v15.md">Full specification v15</a>: sanitized snapshot of the complete hardened design. Historical; the blueprint holds current guidance.</li>
           <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/README.md">Archive index</a>: which claim lives in which section, and which versions were re-run.</li>
         </ul>
       </div>
@@ -487,38 +584,40 @@ done</code></pre>
   </div>
 </section>
 
-<!-- 12. Adopt. -->
-<section class="section" style="--h: 2" id="adopt" aria-labelledby="adopt-h">
-  <div class="wrap">
+<!-- 12. Adopt -->
+<section class="section" id="adopt" aria-labelledby="adopt-h">
+  <div class="wrap" data-reveal>
     <h2 id="adopt-h">Adopt it in a new repo</h2>
-    <p class="lead measure">Start at Tier 0. Copy the templates, fill every blank with the repo's real commands, and keep only the rules the code cannot show. Or ask an agent to run the <code>bootstrap-repo</code> skill.</p>
+    <p class="lead measure">Start at Tier 0. Copy the templates, fill every blank with the repo's real commands, and keep only the rules the code cannot show. Or ask an agent to run <code>bootstrap-repo</code>.</p>
     <div class="cards cards--3">
       <article class="card">
         <h3>Tier 0: day zero</h3>
+        <div class="code-wrap" style="margin-top:0; margin-bottom:var(--s-4);">
+          <button type="button" class="copy-btn" data-copy>Copy</button>
 <pre class="code"><code>cp /path/to/agent-playbook/skills/bootstrap-repo/references/AGENTS.template.md AGENTS.md</code></pre>
+        </div>
         <ul class="rules">
-          <li>Fill in the format, lint, test and gate commands in <code>AGENTS.md</code>.</li>
+          <li>Fill in format, lint, test and gate commands in <code>AGENTS.md</code>.</li>
           <li><code>CLAUDE.md</code> holds one line: <code>@AGENTS.md</code>.</li>
           <li>Copy the issue and pull request templates into <code>.github/</code>.</li>
-          <li>Write a fail-closed CI: format, lint and test, locked dependencies, read-only permissions, actions pinned to full SHAs. No template is shipped for it.</li>
-          <li>Keep tests off user data and the user's git config.</li>
+          <li>Write a fail-closed CI with actions pinned to full SHAs.</li>
         </ul>
       </article>
       <article class="card">
         <h3>Tier 1: parallel agents</h3>
         <ul class="rules">
           <li>Add <code>REVIEW.md</code> from its template. Reviewers are fresh and read-only.</li>
-          <li>Add <code>docs/orchestration.md</code> with the Tier 1 sections only.</li>
-          <li>Add an AST or compiler rule only for a failure that has recurred.</li>
-          <li>For a UI repo, run one production-build browser check.</li>
+          <li>Add <code>docs/orchestration.md</code> with Tier 1 sections only.</li>
+          <li>Turn on the coordinator, worker and reviewer guards.</li>
+          <li>For a UI repo, run one candidate-build browser check.</li>
         </ul>
       </article>
       <article class="card">
         <h3>Tier 2: several hosts publish</h3>
         <ul class="rules">
-          <li>Workers hold no push credentials. They hand their branch and SHAs to one publisher, which does every push under one lock.</li>
-          <li>Policy paths need the owner's signed approval on the exact head.</li>
-          <li>Set host caps: pause heavy jobs when memory or pressure rise above their high thresholds or free disk falls below its floor, and resume once they recover.</li>
+          <li>Workers hold no push credentials; one publisher pushes under one lock.</li>
+          <li>Policy paths require the owner's signed approval on the exact head.</li>
+          <li>Set host caps with hysteresis for memory, pressure and free disk.</li>
         </ul>
       </article>
     </div>
@@ -528,33 +627,33 @@ done</code></pre>
 
 </main>
 
-<footer class="closing" style="--h: 1">
+<footer class="closing">
   <div class="wrap">
     <div class="closing__row">
       <p class="closing__line">Adopt the tiers in order, and move up only when the trigger is real.</p>
       <a class="btn btn--primary" href="#top">Back to the top</a>
     </div>
     <div class="footer-directory">
-    <div class="footer-links">
-      <nav aria-label="Repository files">
-        <p class="label">Read in the repo</p>
-        <ul>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/README.md">README</a></li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/universal-blueprint.md">Blueprint</a></li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/AGENTS.md">AGENTS.md</a></li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/.github/workflows/ci.yml">CI workflow</a></li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/LICENSE">License (Apache-2.0)</a></li>
-        </ul>
-      </nav>
-      <nav aria-label="Archive">
-        <p class="label">Archive</p>
-        <ul>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/README.md">Archive index</a></li>
-          <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-council-decisions-r1-r15.md">Decisions R1 to R15</a></li>
-        </ul>
-      </nav>
-    </div>
-    <p class="legal">Plain files. This page loads nothing from another host. Licensed under the Apache License 2.0.</p>
+      <div class="footer-links">
+        <nav aria-label="Repository files">
+          <p class="label">Read in the repo</p>
+          <ul>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/README.md">README</a></li>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/universal-blueprint.md">Blueprint</a></li>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/AGENTS.md">AGENTS.md</a></li>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/.github/workflows/ci.yml">CI workflow</a></li>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/LICENSE">License (Apache-2.0)</a></li>
+          </ul>
+        </nav>
+        <nav aria-label="Archive">
+          <p class="label">Archive</p>
+          <ul>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/README.md">Archive index</a></li>
+            <li><a href="https://github.com/Nitestack/agent-playbook/blob/main/docs/archive/2026-11-25-council-decisions-r1-r15.md">Decisions R1 to R15</a></li>
+          </ul>
+        </nav>
+      </div>
+      <p class="legal">Plain files. Typography via Google Fonts (with system fallbacks); zero tracking, zero external scripts. Licensed under the Apache License 2.0.</p>
     </div>
   </div>
 </footer>
