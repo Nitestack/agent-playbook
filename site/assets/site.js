@@ -3,9 +3,8 @@
 (function () {
   var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // ── 1. Header elevation + reading progress + scroll-spy ──────────────
+  // ── 1. Header border + scroll-spy ────────────────────────────────────
   var nav = document.querySelector('.nav');
-  var progress = document.querySelector('.nav__progress');
   var navLinks = Array.prototype.slice.call(document.querySelectorAll('.nav__links a[href^="#"]'));
   var sections = navLinks.map(function (a) {
     return document.querySelector(a.getAttribute('href'));
@@ -14,11 +13,6 @@
   function updateScroll() {
     var y = window.scrollY || 0;
     if (nav) nav.classList.toggle('is-scrolled', y > 10);
-    if (progress) {
-      var max = document.documentElement.scrollHeight - window.innerHeight;
-      var ratio = max > 0 ? Math.min(1, Math.max(0, y / max)) : 0;
-      progress.style.transform = 'scaleX(' + ratio.toFixed(4) + ')';
-    }
     var current = null;
     var offset = (nav ? nav.offsetHeight : 72) + 80;
     for (var i = 0; i < sections.length; i++) {
@@ -299,21 +293,4 @@
     });
   });
 
-  // ── 8. Hero Terminal Replay ──────────────────────────────────────────
-  var replayBtn = document.querySelector('[data-term-replay]');
-  var termLines = Array.prototype.slice.call(document.querySelectorAll('[data-term-line]'));
-  var replayTimers = [];
-  function playTerm() {
-    replayTimers.forEach(clearTimeout);
-    replayTimers = [];
-    if (reducedMotion || !termLines.length) return;
-    termLines.forEach(function (l) { l.style.opacity = '0'; });
-    var delays = [60, 260, 520, 740, 1020];
-    termLines.forEach(function (l, i) {
-      replayTimers.push(setTimeout(function () { l.style.opacity = '1'; }, delays[i] || (i * 220)));
-    });
-  }
-  if (replayBtn) {
-    replayBtn.addEventListener('click', playTerm);
-  }
 })();

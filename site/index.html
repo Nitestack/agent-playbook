@@ -23,10 +23,7 @@
 <header class="nav">
   <div class="wrap nav__row">
     <a class="skip-link" href="#top">Skip to content</a>
-    <a class="nav__brand" href="#top" aria-label="agent-playbook, back to the top">
-      <span class="nav__brand-mark" aria-hidden="true">ap</span>
-      agent-playbook
-    </a>
+    <a class="nav__brand" href="#top" aria-label="agent-playbook, back to the top">agent-playbook</a>
     <nav aria-label="Sections">
       <ul class="nav__links">
         <li><a href="#tiers">Tiers</a></li>
@@ -39,7 +36,6 @@
     </nav>
     <a class="btn btn--primary nav__action" href="#adopt">Adopt it in a repo</a>
   </div>
-  <div class="nav__progress" aria-hidden="true"></div>
 </header>
 
 <main id="top">
@@ -48,7 +44,6 @@
 <section class="hero" id="hero" aria-labelledby="hero-h">
   <div class="wrap hero__grid">
     <div class="hero__text">
-      <p class="eyebrow" data-enter-item><span class="eyebrow__dot" aria-hidden="true"></span>Plain files &middot; Apache-2.0 &middot; Nix optional</p>
       <h1 id="hero-h" data-enter-item>Skills, templates and guard hooks for agent repos</h1>
       <p class="hero__lead" data-enter-item>A portable kit of plain Markdown and bash: ten workflow skills, tier-by-tier repo templates, three <code>PreToolUse</code> guard hooks with in-place shift renewal, and a frozen decision archive.</p>
       <ul class="facts" data-enter-item aria-label="Repository facts">
@@ -65,17 +60,15 @@
     <figure class="frame term" data-enter-item aria-labelledby="term-h">
       <div class="term__bar">
         <div class="term__dots" aria-hidden="true"><span></span><span></span><span></span></div>
-        <span class="term__title" id="term-h">agent-playbook &mdash; verify</span>
+        <span class="term__title" id="term-h">verify</span>
         <div class="term__actions">
-          <button type="button" class="term__btn" data-term-replay>Replay</button>
           <button type="button" class="term__btn" data-copy>Copy</button>
         </div>
       </div>
-      <pre class="term__body"><span class="term__line" data-term-line><span class="prompt">$</span> bash hooks/tests/test-hooks.sh</span>
-<span class="term__line term__line--ok" data-term-line>test-hooks: 388 passed, 0 failed</span>
-<span class="term__line" data-term-line><span class="prompt">$</span> bash hooks/tests/lint-skills.sh</span>
-<span class="term__line term__line--ok" data-term-line>skill lint: ok (10 skills)</span>
-<span class="term__line term__line--muted" data-term-line><span class="prompt">$</span> hooks/playbook-registry.sh status <span class="cursor" aria-hidden="true"></span></span></pre>
+      <pre class="term__body"><span class="term__line"><span class="prompt">$</span> bash hooks/tests/test-hooks.sh</span>
+<span class="term__line term__line--ok">test-hooks: 388 passed, 0 failed</span>
+<span class="term__line"><span class="prompt">$</span> bash hooks/tests/lint-skills.sh</span>
+<span class="term__line term__line--ok">skill lint: ok (10 skills)</span></pre>
     </figure>
   </div>
 </section>
@@ -288,61 +281,51 @@
 
     <div class="cards cards--3" id="skills-check">
       <article class="card card--link" data-skill-role="orchestrator">
-        <span class="card__tag">Orchestrator</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/orchestrate/SKILL.md">orchestrate</a></h3>
         <p>Run or renew an orchestrator shift for one milestone slice: unified startup, in-place renewal, fenced rotation fallback, and non-blocking routing.</p>
         <p class="use"><strong>Use when</strong> starting a shift, renewing context, or taking over a rotated shift.</p>
       </article>
       <article class="card card--link" data-skill-role="worker">
-        <span class="card__tag">Worker</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/ticket-implement/SKILL.md">ticket-implement</a></h3>
         <p>Implement one issue end to end in an isolated worktree: red-green TDD, foreground gates, signed linear commits, exact-SHA PR or <code>ALREADY_SATISFIED</code>.</p>
         <p class="use"><strong>Use when</strong> the task is a single issue number, from pre-flight to pull request.</p>
       </article>
       <article class="card card--link" data-skill-role="ops">
-        <span class="card__tag">Bootstrap</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/bootstrap-repo/SKILL.md">bootstrap-repo</a></h3>
         <p>Equip a new or existing repo tier by tier using the templates in <code>references/</code>, plus repo-scoped stack skills.</p>
         <p class="use"><strong>Use when</strong> adding <code>AGENTS.md</code>, <code>REVIEW.md</code>, or <code>docs/orchestration.md</code>.</p>
       </article>
       <article class="card card--link" data-skill-role="worker">
-        <span class="card__tag">Worker</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/rebase-and-fix/SKILL.md">rebase-and-fix</a></h3>
         <p>Apply review fixes, resolve conflicts, renumber migrations and rebase onto a moved base with the FULL-first 3-outcome classifier.</p>
         <p class="use"><strong>Use when</strong> a PR is <code>REQUEST_CHANGES</code>, reports <code>NEEDS_REBASE</code>, or conflicts.</p>
       </article>
       <article class="card card--link" data-skill-role="reviewer">
-        <span class="card__tag">Reviewer</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/blind-review/SKILL.md">blind-review</a></h3>
         <p>Anti-anchored review of one exact (PR, base, head) tuple from a fresh read-only context over a blob-exact, <code>.git</code>-free snapshot.</p>
         <p class="use"><strong>Use when</strong> a PR is green and needs a verdict, or a new head needs re-review.</p>
       </article>
       <article class="card card--link" data-skill-role="reviewer orchestrator">
-        <span class="card__tag">Council</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/council-review/SKILL.md">council-review</a></h3>
         <p>Cold, independent reviewers discuss on a shared temporary board (blind R1 &rarr; all-to-all R2 &rarr; consensus R3) and converge with evidence.</p>
         <p class="use"><strong>Use when</strong> deciding major architecture, security boundary or policy shifts.</p>
       </article>
       <article class="card card--link" data-skill-role="reviewer worker">
-        <span class="card__tag">QA</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/browser-verify/SKILL.md">browser-verify</a></h3>
         <p>Verify UI changes in a real browser against the exact candidate build SHA: routes, console errors, network failures, focus and empty states.</p>
         <p class="use"><strong>Use when</strong> a task changes web UI, layout, routing or client-side API behavior.</p>
       </article>
       <article class="card card--link" data-skill-role="ops">
-        <span class="card__tag">Publisher</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/publish-pr/SKILL.md">publish-pr</a></h3>
         <p>Land one approved, green PR by exact-SHA compare-and-swap fast-forward with intent reconciliation and exact-tuple verification.</p>
         <p class="use"><strong>Use when</strong> a PR is approved and green, or stopped on a moved default branch.</p>
       </article>
       <article class="card card--link" data-skill-role="ops">
-        <span class="card__tag">Hygiene</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/safe-cleanup/SKILL.md">safe-cleanup</a></h3>
         <p>Inventory and remove stale worktrees, merged branches and build caches with exact-tip verification, never touching unmerged or live work.</p>
         <p class="use"><strong>Use when</strong> disk space is low, worktrees pile up, or PRs have merged.</p>
       </article>
       <article class="card card--link" data-skill-role="orchestrator ops">
-        <span class="card__tag">Ops</span>
         <h3><a href="https://github.com/Nitestack/agent-playbook/blob/main/skills/session-miner/SKILL.md">session-miner</a></h3>
         <p>Mine session transcripts, CI failures and review rounds for recurring friction and turn each root cause into a sanitized mechanical fix.</p>
         <p class="use"><strong>Use when</strong> a milestone ends or the same failure keeps coming back.</p>
@@ -354,7 +337,6 @@
 <!-- 9. Guards: dark band + interactive simulator -->
 <section class="section section--dark" id="guards" aria-labelledby="guards-h">
   <div class="wrap" data-reveal>
-    <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Mechanical guardrails &middot; Bash + jq</p>
     <h2 id="guards-h">Guard hooks: three roles, three sets of limits</h2>
     <p class="lead measure">Each guard is a <code>PreToolUse</code> hook. Inactive threads exit 0 before reading stdin; active threads get checked and receive actionable reasons on exit 2.</p>
 
