@@ -81,25 +81,20 @@
 
     <div class="prompt-box">
       <div class="prompt-box__tabs" role="tablist" aria-label="Choose a ready-to-paste agent prompt">
-        <button type="button" class="pill" role="tab" data-prompt-tab="install" aria-selected="true">1. Install the playbook</button>
-        <button type="button" class="pill" role="tab" data-prompt-tab="bootstrap" aria-selected="false">2. Set up my repo</button>
-        <button type="button" class="pill" role="tab" data-prompt-tab="ship" aria-selected="false">3. Ship an issue</button>
-        <button type="button" class="pill" role="tab" data-prompt-tab="renew" aria-selected="false">4. Renew a long shift</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="setup" aria-selected="true">Set up this project (one prompt)</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="ship" aria-selected="false">Ship an issue</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="renew" aria-selected="false">Renew a shift</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="council" aria-selected="false">Run a council review</button>
       </div>
 
-      <div class="prompt-box__panel" data-prompt-panel="install">
-        <p class="prompt-box__why"><strong>What happens:</strong> Your agent clones the kit, symlinks only its own skills (never overwriting yours), registers the three dormant guard hooks, and runs all 388 tests to prove it works.</p>
+      <div class="prompt-box__panel" data-prompt-panel="setup">
+        <p class="prompt-box__why"><strong>One prompt, end to end:</strong> Paste this inside your project repo. Your agent installs <code>agent-playbook</code> if needed, links its skills safely, registers the three dormant guard hooks, bootstraps this repo with its real commands, and verifies everything passes.</p>
         <div class="code-wrap">
           <button type="button" class="copy-btn" data-copy>Copy prompt</button>
-<pre class="code code--prompt"><code>Clone https://github.com/Nitestack/agent-playbook into ~/agent-playbook, symlink its skills into my agent's skills directory without overwriting existing files or foreign links, and register its three PreToolUse guard hooks. Verify the install with bash hooks/tests/test-hooks.sh and bash hooks/tests/lint-skills.sh.</code></pre>
-        </div>
-      </div>
-
-      <div class="prompt-box__panel" data-prompt-panel="bootstrap" hidden>
-        <p class="prompt-box__why"><strong>What happens:</strong> Your agent reads your repo, detects your real build/test commands, writes a lean <code>AGENTS.md</code>, <code>REVIEW.md</code> and <code>docs/orchestration.md</code>, and checks that CI still passes.</p>
-        <div class="code-wrap">
-          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
-<pre class="code code--prompt"><code>Use the bootstrap-repo skill to set up Tier 1 in this repository: write a short AGENTS.md with our real format, lint and test commands, add REVIEW.md and docs/orchestration.md, and verify every command actually passes.</code></pre>
+<pre class="code code--prompt"><code>Set up https://github.com/Nitestack/agent-playbook for this project:
+1. If not already installed, clone it to ~/agent-playbook, symlink its skills into my agent's skills directory without overwriting my own files or foreign links, and register its three PreToolUse guard hooks.
+2. Run the bootstrap-repo skill on this repo (pick the right tier for it): write a lean AGENTS.md with our real format/lint/test commands, add CLAUDE.md, and for Tier 1+ add REVIEW.md and docs/orchestration.md.
+3. Verify the playbook (bash ~/agent-playbook/hooks/tests/test-hooks.sh) and run this repo's own checks before finishing.</code></pre>
         </div>
       </div>
 
@@ -116,6 +111,14 @@
         <div class="code-wrap">
           <button type="button" class="copy-btn" data-copy>Copy prompt</button>
 <pre class="code code--prompt"><code>Check playbook-registry.sh status and renew this orchestrator shift in place following the orchestrate skill so we get a fresh context without draining running workers or losing PR watches.</code></pre>
+        </div>
+      </div>
+
+      <div class="prompt-box__panel" data-prompt-panel="council" hidden>
+        <p class="prompt-box__why"><strong>What happens:</strong> Independent reviewers critique a major architecture or policy change blind in Round 1, debate each other on a temporary board in Round 2, and converge with evidence in Round 3.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
+<pre class="code code--prompt"><code>Run council-review on docs/proposal.md with three independent reviewers on a temporary board (blind R1, all-to-all R2, consensus R3), verify every claim against the codebase, delete the board, and give me the summary with open decisions.</code></pre>
         </div>
       </div>
     </div>
