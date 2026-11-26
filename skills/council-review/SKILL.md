@@ -24,7 +24,7 @@ A council is a discussion, not parallel monologues: every reviewer reads and ans
    - **R1, blind:** each reviewer reads only `BRIEF.md` and the artifact, never another member's files, and writes `r1-<name>.md`.
    - **R2, discussion:** each reviewer reads all `r1-*.md`, verifies the others' findings against the artifact and writes `r2-<name>.md`: agree / disagree with a reason / refine, new findings, and questions addressed to members by name (`@name: …`).
    - **R3, consensus:** each reviewer reads all `r2-*.md`, answers the questions addressed to it and writes `r3-<name>.md` with its endorsed findings (deduplicated, with severity) and its final verdict.
-4. The judge triages the R3 files with section 2 below, writes the council summary, then deletes the board. Keep only the summary.
+4. The judge triages the R3 files with section 2 below, writes the council summary, then deletes the board. Keep only the sanitized council summary.
 
 ## 1b. Independence: Give as Little Context as Possible
 - Start every reviewer cold: no orchestrator transcript, no earlier conclusions, no hint of what the judge expects or prefers, no author self-assessment.
@@ -38,8 +38,9 @@ A council is a discussion, not parallel monologues: every reviewer reads and ans
 
 ## 3. Bounded Convergence
 1. Apply all validated fixes in one revised artifact. Record what changed and what was rejected, with reasons.
-2. Run the next round on the **delta plus the updated artifact**, not from scratch. Stop when every panel member returns `CONSENSUS`, which usually takes two or three rounds.
+2. Stop when every panel member returns `CONSENSUS` within the current board, which usually takes two or three rounds.
 3. If a real trade-off remains (scope, UX, credentials, cost or policy), stop debating. Escalate a numbered decision list to the owner, with a `(Recommended)` default for each item.
+4. **Revisions start a new cycle.** R1–R3 are pinned to one artifact revision. When the artifact is revised, verify the revised artifact with a **fresh cycle on a fresh board**. The new brief may name the changed sections as the focus, but reviewers still start cold. Do not carry round files across revisions.
 
 ## 4. Deliverable
 A short council summary: each reviewer's final verdict, the key defects found and resolved, the rejected findings with reasons, and the open owner decisions.

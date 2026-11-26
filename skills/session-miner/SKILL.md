@@ -15,3 +15,4 @@ Turn evidence from a run into fixes that stop the failure from recurring. Work f
    2. a minimal rule in `AGENTS.md` or the review rules. Delete the obsolete prose it replaces.
 4. **Verify each fix** against the incident that motivated it. A fix that cannot be shown to stop the failure is not done.
 5. **Report** as a table: `Observed incident -> Root cause -> Mechanical fix -> Verification`. Leave out vanity metrics and speculative abstractions.
+   - **Privacy guardrail:** keep raw transcripts, telemetry dumps and private identifiers (hostnames, local paths, device or ruleset IDs) out of repo-facing output. Retain only sanitized summaries: counts, mechanisms and placeholder names such as `<host>`.

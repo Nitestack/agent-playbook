@@ -5,12 +5,17 @@ description: Inventory and remove stale worktrees, merged branches and build cac
 
 # Safe Cleanup Protocol
 
+Run this on an **owning executor or the operator, with host access**. A guarded coordinator does not run cleanup: route the request to the named executor.
+
 ## Rules
 1. **Confirm first for bulk or ambiguous cleanup.** Measure sizes (`du -sh`), sort largest first, show each item's merge status and last-modified time, and get confirmation before deleting anything.
 2. **Delete only what is provably done.** A branch or worktree may go only when all three hold:
    - it is merged: `git merge-base --is-ancestor <sha> origin/<default>`,
    - its working tree is clean: `git -C <path> status --porcelain` prints nothing,
    - no live process runs inside it.
+   - **Exact-tip binding:** the branch or worktree tip equals the expected merged `<sha>` recorded under the ticket's lease. Check this immediately before deleting. If the tip has moved, or the name now points at reused work, stop cleanup for that item and report it.
+   - **Already absent** is idempotent success: record it and move on.
+
    Remove worktrees with `git worktree remove <path>`. Never add `--force`.
 3. **Protect live state.** Never touch production data directories, uncommitted user files, or staged index entries that belong to unrelated work.
 4. **No wildcards.** Never `rm -rf` a glob such as `/tmp/<prefix>*`, which could hit a concurrent run. Target exact paths you have verified.

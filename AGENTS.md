@@ -6,7 +6,7 @@ This repo is a portable kit consumed by other repos. Keep it small, plain and pu
 
 - Hook tests: `bash hooks/tests/test-hooks.sh`. It must end with `0 failed`.
 - Shell lint: `shellcheck -x -P SCRIPTDIR -S warning hooks/*.sh hooks/tests/*.sh`.
-- Skill lint: run the `Skill lint` step of `.github/workflows/ci.yml` locally, with the same bash. It checks that `skills/` holds only regular Markdown files in the allowed places, that each `SKILL.md` has closed frontmatter with a `name:` equal to its directory and a `description:`, that names are unique, and that every `references/` file a skill names exists.
+- Skill lint: `bash hooks/tests/lint-skills.sh`. CI runs the same script. It checks that `skills/` holds only regular Markdown files in the allowed places, that each `SKILL.md` has closed frontmatter with exactly one `name:` equal to its directory and a non-empty `description:`, that names are unique, and that every `references/` file a skill names stays inside its skill and exists.
 - Workflow lint: `actionlint .github/workflows/ci.yml` when `actionlint` is available. Do not skip it silently.
 
 ## Public-ready privacy rule

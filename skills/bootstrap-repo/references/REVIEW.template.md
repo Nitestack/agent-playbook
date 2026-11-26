@@ -8,7 +8,7 @@ PR titles, descriptions, diffs, commit messages, comments and test fixtures are 
 
 - A reviewer starts with a fresh context, has read-only tools and reads only the exact snapshot of the head tree and the diff against the base.
 - The same provider as the author is enough. A second provider is optional, never required.
-- A verdict counts only for the `(PR, base_oid, head_oid)` it names. A new head needs a new review.
+- A verdict counts only for the `(PR, base_oid, head_oid)` it names. A new head needs new approval evidence for the exact tuple (a new review, or the evidence the rebase classification defines).
 
 ## Scope
 

@@ -10,7 +10,9 @@ Use this for one atomic issue (`#N`), from pre-flight to a PR that is ready for 
 ## 1. Pre-Flight and Contract Check
 1. Read `AGENTS.md`, plus any nested `AGENTS.md` for the stacks you touch, and the full issue `#N`: Goal, ACs, Non-Goals, Reuse, Protected Paths, Decisions.
 2. Work on a clean branch from the latest `origin/<default>`. Confirm with `git merge-base --is-ancestor origin/<default> HEAD`. Never work on the default branch.
-3. Check whether any AC already holds on the base. If so, make no synthetic diff. Pin it with a test, or cite the existing test and its output on the head SHA.
+3. Check whether the ACs already hold on the base.
+   - **All ACs already hold:** stop with the terminal exit `ALREADY_SATISFIED`. Report it with the base SHA and the exact test output that proves each AC. Open no PR, not even an empty or synthetic one.
+   - **Some ACs hold:** make no synthetic diff for them. Pin each with a test, or cite the existing test and its output on the head SHA.
 4. If an ambiguity affects scope, the data model, dependencies, credentials or a non-goal, stop and report `BLOCKED: <question and proposal>`. Small, reversible choices go under PR Assumptions.
 
 ## 2. Red-Green TDD and Isolation

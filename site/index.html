@@ -169,12 +169,12 @@ test-hooks: 266 passed, 0 failed</pre>
           <li><code>shift_age &gt;= 6h</code></li>
           <li>the milestone slice is complete</li>
         </ul>
-        <h3>Rotation drains, cancels and hands off</h3>
+        <h3>Rotation renews in place, or drains and hands off</h3>
         <ol class="steps">
-          <li><strong>Freeze.</strong> The coordinator runs <code>playbook-registry.sh drain &lt;marker&gt;</code>; its guard then refuses new dispatches, except the successor launch that carries the marker.</li>
-          <li><strong>Drain for up to 15 minutes,</strong> then cancel what is left with the host's cancel tool and bump the shift generation.</li>
+          <li><strong>Renew in place (default).</strong> The coordinator runs <code>playbook-registry.sh renew</code> and continues in a fresh context. Its thread id, guard, watches and heartbeat carry over.</li>
+          <li><strong>Or hand off to a new thread.</strong> <code>playbook-registry.sh drain &lt;marker&gt;</code> freezes dispatch. Drain for up to 15 minutes, then cancel what is left and bump the shift generation.</li>
           <li><strong>Stop after two forced rotations.</strong> A rotation that had to cancel children counts once, however many it cancelled. After the second, the shift stops rotating and escalates to the owner. It never starts a third.</li>
-          <li><strong>Hand off.</strong> The successor registers itself, records receipt, attaches its watches, schedules a 20-minute heartbeat and acknowledges, then removes its predecessor's registry entry. Only then does the predecessor stop.</li>
+          <li><strong>Fenced takeover.</strong> The successor launches idle, is bound as a <code>candidate</code>, recovers, attaches its watches and acknowledges. <code>takeover</code> then makes it the coordinator and marks the predecessor <code>retired</code>, never removing its guard. A failure before takeover runs <code>abort</code>.</li>
         </ol>
       </div>
 

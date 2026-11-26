@@ -68,18 +68,27 @@ nix flake check --override-input agent-playbook git+file:///path/to/agent-playbo
 
 ## Install without Nix
 
-Symlink the skills you want into your agent's skill directory. The loop creates the directory, replaces its own earlier links on a rerun, and skips anything else that already has the name:
+Symlink the skills you want into your agent's skill directory. The loop creates the directory and replaces only the links that point into this checkout, so a rerun refreshes its own links. It skips and reports everything else: a real file or directory with the name, and a link (dangling or not) that points anywhere outside this checkout.
 
 ```bash
+src_root=$(readlink -f /path/to/agent-playbook)
 dest=~/.claude/skills
 mkdir -p "$dest"
-for s in /path/to/agent-playbook/skills/*/; do
+for s in "$src_root"/skills/*/; do
+  s=${s%/}
   name=$(basename "$s")
-  if [ -e "$dest/$name" ] && [ ! -L "$dest/$name" ]; then
-    echo "skip $name: $dest/$name exists and is not a link"
-    continue
+  link=$dest/$name
+  if [ -L "$link" ]; then
+    owner=$(readlink -f "$link")
+    case $owner in
+      "$src_root"/*) ln -sfn "$s" "$link" ;;
+      *) echo "skip $name: $link is a link to $owner, not to this checkout" ;;
+    esac
+  elif [ -e "$link" ]; then
+    echo "skip $name: $link exists and is not a link"
+  else
+    ln -s "$s" "$link"
   fi
-  ln -sfn "${s%/}" "$dest/$name"
 done
 ```
 
@@ -131,30 +140,54 @@ In Codex, register the same three commands in `~/.codex/hooks.json`. Codex passe
 | Guard | Active when | Configuration |
 |---|---|---|
 | `coordinator-guard.sh` | the thread id is listed in the coordinator registry | registry path: `PLAYBOOK_COORDINATOR_REGISTRY`, default `~/.local/state/agent-playbook/coordinator-threads.json` |
-| `worker-guard.sh` | `PLAYBOOK_WORKER_WORKTREE` is set in the worker's environment | `PLAYBOOK_WORKER_BRANCH` (the one branch it may push), `PLAYBOOK_PROTECTED_BRANCHES` (default `main master develop`) |
+| `worker-guard.sh` | `PLAYBOOK_WORKER_WORKTREE` is set in the worker's environment, or, as a fallback, the thread id is listed in the worker registry | `PLAYBOOK_WORKER_BRANCH` (the one branch it may push), `PLAYBOOK_PROTECTED_BRANCHES` (default `main master develop`); worker registry path: `PLAYBOOK_WORKER_REGISTRY`, default `~/.local/state/agent-playbook/worker-threads.json`, written with `playbook-registry.sh worker add` |
 | `reviewer-guard.sh` | the thread id is listed in the review registry with a `snapshot_root` | registry path: `PLAYBOOK_REVIEW_REGISTRY`, default `~/.local/state/agent-playbook/review-threads.json` |
 
 The thread id is `PLAYBOOK_THREAD_ID`, or `T3CODE_THREAD_ID`, which T3 Code sets for every thread it runs. Outside T3 Code, start each guarded agent with its own `PLAYBOOK_THREAD_ID`. Without a thread id, the coordinator and reviewer guards stay inactive.
 
-**Write the registries with `playbook-registry.sh`**, never by hand:
+**Write the registries with `playbook-registry.sh`**, never by hand. Writes take the registry lock and replace the file atomically. A guarded coordinator may run these commands, except removing its own entry.
 
-```bash
-hooks/playbook-registry.sh coordinator add <thread-id>             # operator, before the shift starts
-hooks/playbook-registry.sh drain <handoff-marker>                  # the coordinator, when it rotates
-hooks/playbook-registry.sh coordinator add <successor-thread-id>   # the successor, first thing
-hooks/playbook-registry.sh coordinator remove <old-thread-id>      # the successor, after the handoff
-hooks/playbook-registry.sh review add <thread-id> <snapshot-root>  # the coordinator, before a review
-hooks/playbook-registry.sh review remove <thread-id>               # the coordinator, after the verdict
-hooks/playbook-registry.sh show coordinator|review
-```
+| Command | What it does |
+|---|---|
+| `coordinator add <thread-id> [slice]` | Registers a coordinator for one shift. `slice` is an optional label for the milestone slice. |
+| `coordinator remove <thread-id>` | Removes a coordinator entry. |
+| `status [thread-id]` | Prints the coordinator state, age, cancel count and `ROTATE_DUE` of one thread (defaults to the calling thread). |
+| `renew` | In-place renewal. The calling coordinator keeps its thread id, guard, watches and heartbeat and continues in a fresh context. |
+| `drain <handoff-marker> [--cancelled]` | Marks the caller as draining, which freezes new dispatches, and stores the marker that lets its successor through. `--cancelled` records that the rotation had to cancel children; such a rotation counts toward the limit of two forced rotations. |
+| `bind-candidate <candidate-thread-id>` | Binds an idle successor as a `candidate` with dispatch disabled, so it can recover and attach its watches before it takes over. |
+| `takeover <predecessor-thread-id> <handoff-marker>` | Atomically makes the candidate the coordinator and sets the predecessor to `state: "retired"`. The predecessor's entry stays in place, so its guard keeps running. |
+| `abort <handoff-marker>` | Ends a handoff that failed before `takeover`. The predecessor keeps the shift. |
+| `review snapshot [--with-base] [--fetch <remote> <ref>] <thread-id> <repo> <base-oid> <head-oid>` | Exports the exact head to a read-only snapshot root, prints its path and registers it for the reviewer. `--with-base` builds the package as a single root that also includes the base. `--fetch` fetches the ref from the remote before exporting; it is opt-in. |
+| `review add <thread-id> <snapshot-root>` | Registers a reviewer thread for a snapshot root you prepared yourself. |
+| `review remove <thread-id>` | Unregisters a reviewer and deletes the snapshot if `review snapshot` created it. |
+| `worker add <thread-id> <worktree> [branch]` | Registers a worker for the worker guard's registry fallback. |
+| `worker remove <thread-id>` | Unregisters a worker. |
+| `show coordinator\|review\|worker` | Prints one registry as JSON. |
 
-A guarded coordinator may run exactly these commands, except removing its own entry. The registries are JSON objects keyed by thread id: `{"<thread-id>": {"draining": false}}` for coordinators, `{"<thread-id>": {"snapshot_root": "/abs/path"}}` for reviewers.
+The registries are JSON objects keyed by thread id: `{"<thread-id>": {"draining": false}}` for coordinators, `{"<thread-id>": {"snapshot_root": "/abs/path"}}` for reviewers. A coordinator entry also carries a `state`: `candidate` while a successor waits for takeover, and `retired` for a predecessor after takeover. A retired entry is kept on purpose, so its guard still applies.
 
-**Workers** get their environment from whoever starts them: `PLAYBOOK_WORKER_WORKTREE=<worktree>` and, recommended, `PLAYBOOK_WORKER_BRANCH=<feature-branch>`.
+**Registries are host- and account-local.** Each machine and OS account keeps its own files under `~/.local/state/agent-playbook/`, or at the paths the `PLAYBOOK_*_REGISTRY` variables name. In v1, shift rotation stays on one coordinator host, which is the authority for the shift. Do not share a registry between hosts or accounts.
+
+**Workers** get their environment from whoever starts them: `PLAYBOOK_WORKER_WORKTREE=<worktree>` and, recommended, `PLAYBOOK_WORKER_BRANCH=<feature-branch>`. When the variable is missing, the worker guard falls back to the worker registry, which `worker add` writes. A bare delegated launch that has neither the variable nor a registry entry made before it starts is unguarded, because the guard cannot know which worktree is its own. Register the worker before it starts, or launch it with the variable.
 
 **Codex reviewers.** The reviewer guard allows only Claude Code's `Read`, `Grep` and `Glob`, and Codex reads files through its shell. Do not register a Codex reviewer in the review registry; run it in Codex's read-only sandbox with the snapshot as its working directory. That setup is not covered by the test suite.
 
 The guards stop a well-meaning agent from drifting. They are not a defense against a determined adversary; interpreters such as `python -c` are not inspected.
+
+## Host mapping
+
+The skills describe capabilities, not products. This table maps each capability to the tool a host provides. T3 Code tools come first, then the plain CLI.
+
+| Capability | T3 Code | Plain CLI |
+|---|---|---|
+| Idle thread launch: start a fresh agent on a ready worktree | `t3_thread_launch` without `message` (creates an idle thread so you can bind it before sending the brief) | Start a new agent session in the worktree |
+| Fresh-context renewal: same thread, empty context | `t3_thread_send` with `freshContext: true` | `/clear` |
+| Cancel a running child | `task_cancel` for a delegated task; `t3_thread_interrupt` with `stop: true` for a top-level thread | Stop the process, or interrupt it with Ctrl+C |
+| PR watch: wake on checks and reviews of an exact head | `watch_pull_request` | Poll `gh pr view` by head SHA; do not run a wait loop inside an agent |
+| Heartbeat schedule: wake the coordinator on a fixed interval | `schedule_task` | A cron entry or systemd timer that resumes the session |
+| Browser verification: drive the built UI and check it | `preview_open`, `preview_navigate`, `preview_snapshot` and the other `preview_*` tools | A headless browser run by your test tooling |
+
+The skills name the capability. Use this table to find the tool on the host you run on.
 
 ## Bootstrap a repo
 
@@ -170,9 +203,10 @@ Or ask an agent to run the `bootstrap-repo` skill, which reads only the template
 
 ```bash
 bash hooks/tests/test-hooks.sh
+bash hooks/tests/lint-skills.sh
 ```
 
-CI runs the same suite and `shellcheck` on the hooks, then checks that `skills/` holds only regular Markdown files, that each `SKILL.md` has closed frontmatter with a `name:` equal to its directory and a unique name, and that every `references/` file a skill names exists. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI runs the same suite and `shellcheck` on the hooks. It runs `hooks/tests/lint-skills.sh` for the skills, so local and CI checks use one script. That script checks that `skills/` holds only regular Markdown files, that each `SKILL.md` has closed frontmatter with exactly one `name:` equal to its directory and a non-empty `description:`, that names are unique, and that every `references/` file a skill names stays inside its skill and exists. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## License
 

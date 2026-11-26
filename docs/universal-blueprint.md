@@ -30,19 +30,23 @@ Stack-specific skills (a framework, a language's build tool, a deploy stack) liv
 - **Unit:** one orchestrator thread equals one shift, which covers one milestone slice. Never run a forever-thread, and never one thread per ticket.
 - **Parallelism by default:** fill every free worker slot with ready work. Overlapping files are absorbed by isolated worktrees and by non-blocking `NEEDS_REBASE` routing (see `skills/rebase-and-fix`). Do not serialize dispatch in advance.
 - **Rotation triggers:** `compactions >= 2`, or `dispatches_in_shift >= 40`, or `shift_age >= 6h`, or milestone completion.
-- **Drain-or-cancel handoff:**
-  1. Freeze new dispatches: the coordinator runs `playbook-registry.sh drain <handoff-marker>`, which sets `draining = true` on its own registry entry.
-  2. Wait up to 15 minutes for active children. Cancel what is left with the host's cancel capability (in T3 Code: `task_cancel` for delegated tasks, `t3_thread_interrupt(stop: true)` for top-level threads). Bump the shift generation.
-  3. A rotation that had to cancel children counts once, however many it cancelled. After the second such rotation, stop and escalate to the owner. Never start a third.
-  4. Launch the successor with the marker in its prompt. The successor registers itself and removes its predecessor's entry. The old shift stays alive until the successor records receipt, attaches its watches, schedules a heartbeat and acknowledges.
+- **In-place renewal (default):** when a rotation trigger fires, the coordinator runs `playbook-registry.sh renew` and continues in a fresh context: `t3_thread_send` with `freshContext: true` in T3 Code, or `/clear` on the plain CLI. The thread keeps its id, so its guard, watches, heartbeat and live child callbacks carry over unchanged. Renew in place whenever the host can.
+- **New-thread rotation (fallback):** use it only when the thread cannot be renewed in place. The fenced flow is:
+  1. **Drain.** The predecessor runs `playbook-registry.sh drain <handoff-marker>` (add `--cancelled` if it will cancel children). Its entry becomes `draining`, which freezes new dispatches.
+  2. **Drain or cancel.** Wait up to 15 minutes for active children, then cancel what is left with the host's cancel capability: `task_cancel` for delegated tasks, `t3_thread_interrupt` with `stop: true` for top-level threads. Bump the shift generation.
+  3. **Launch idle and bind.** Launch the successor idle, with the marker in its prompt, and run `playbook-registry.sh bind-candidate <candidate-thread-id>`. The candidate's entry is in state `candidate`, and it cannot dispatch until takeover.
+  4. **Recover and attach.** The candidate records receipt, recovers its state, attaches its watches, schedules the 20-minute heartbeat and acknowledges.
+  5. **Take over atomically.** `playbook-registry.sh takeover <predecessor-thread-id> <handoff-marker>` makes the candidate the coordinator and sets the predecessor to `state: "retired"`. The predecessor's entry is never removed, so its guard keeps running. Only after takeover does the predecessor stop.
+  6. **Abort on failure.** If anything fails before takeover, run `playbook-registry.sh abort <handoff-marker>`. The predecessor keeps the shift.
+- A rotation that had to cancel children counts once, however many it cancelled. After the second such rotation, stop and escalate to the owner. Never start a third.
 
 ### Pre-tool guards
 
-The guards are `PreToolUse` hooks for Claude Code and Codex. Each one does nothing until it is activated for a thread, so they are safe to register globally. The coordinator and reviewer guards are active when the thread id (`PLAYBOOK_THREAD_ID`, else T3 Code's `T3CODE_THREAD_ID`) is listed in their registry; `playbook-registry.sh` writes those registries. The worker guard is active when `PLAYBOOK_WORKER_WORKTREE` is set. The README shows the setup.
+The guards are `PreToolUse` hooks for Claude Code and Codex. Each one does nothing until it is activated for a thread, so they are safe to register globally. The coordinator and reviewer guards are active when the thread id (`PLAYBOOK_THREAD_ID`, else T3 Code's `T3CODE_THREAD_ID`) is listed in their registry; `playbook-registry.sh` writes those registries. The worker guard is active when `PLAYBOOK_WORKER_WORKTREE` is set or, as a fallback, when the thread id is listed in the worker registry (`PLAYBOOK_WORKER_REGISTRY`, written with `playbook-registry.sh worker add`). A bare delegated launch with neither the variable nor a pre-registered entry is unguarded. The README shows the setup.
 
 | Role | Allows | Denies |
 |---|---|---|
-| **Coordinator** | Read tools, read-only git and `gh`, `gh issue` create and comment, GET-only `gh api`, the publish broker, `playbook-registry.sh` (except removing itself), orchestration tools | Repo writes, builds, tests, mutating git, merges (CLI and forge tools), wait loops, new dispatches while draining |
+| **Coordinator** | Read tools, read-only git and `gh`, `gh issue` create and comment, GET-only `gh api`, the publish broker, `playbook-registry.sh` (except removing itself), orchestration tools | Repo writes, builds, tests, mutating git, merges (CLI and forge tools), wait loops, new dispatches while draining or while its entry is a `candidate`. A `retired` entry keeps its guard, so the predecessor stays under these rules after takeover |
 | **Worker** | Writes only inside its own worktree (`git -C "$WT"`); pushes only to `PLAYBOOK_WORKER_BRANCH` when set | Writes outside the worktree, pushes to protected branches (`PLAYBOOK_PROTECTED_BRANCHES`, default `main master develop`) |
 | **Reviewer** | Claude Code's Read, Grep and Glob inside the review snapshot | Bash, every write tool, MCP tools, web access, sub-agents, paths that escape the snapshot |
 
@@ -54,6 +58,7 @@ Guards need bash 4 or newer, `jq`, `git` and GNU coreutils. They stop a well-mea
 
 - **Context, not vendor:** an independent reviewer starts with a fresh context, has read-only tools, and reads only an exact snapshot. The same provider as the author is enough.
 - **Snapshot:** export every tracked file of the exact head with no `.git` directory and no export attributes applied, put the diff against the base next to that tree (never inside it), and make the snapshot read-only. See `skills/blind-review`.
+- **Packages:** `playbook-registry.sh review snapshot` builds the snapshot. With `--with-base` it writes a single-root package that also carries the base, so the reviewer opens one root. With `--fetch <remote> <ref>` it fetches the ref before exporting. `--fetch` is opt-in; without it the snapshot uses only the objects already present.
 - **Exact tuple:** a verdict counts only for the `(PR, base, head)` it names. A new head needs new approval evidence: a new review, or, after a rebase, the evidence its classification defines (section 4).
 - **Defects only:** the reviewer reports numbered defects with severity, file, impact and minimal fix. It skips style.
 
