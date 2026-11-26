@@ -26,7 +26,7 @@
     <a class="nav__brand" href="#top" aria-label="agent-playbook, back to the top">agent-playbook</a>
     <nav aria-label="Sections">
       <ul class="nav__links">
-        <li><a href="#tiers">Tiers</a></li>
+        <li><a href="#quickstart">Quickstart</a></li>
         <li><a href="#workflow">Workflow</a></li>
         <li><a href="#skills-run">Skills</a></li>
         <li><a href="#guards">Guards</a></li>
@@ -34,7 +34,7 @@
         <li><a href="#archive">Archive</a></li>
       </ul>
     </nav>
-    <a class="btn btn--primary nav__action" href="#adopt">Adopt it in a repo</a>
+    <a class="btn btn--primary nav__action" href="#quickstart">Start in 30 seconds</a>
   </div>
 </header>
 
@@ -44,15 +44,15 @@
 <section class="hero" id="hero" aria-labelledby="hero-h">
   <div class="wrap hero__grid">
     <div class="hero__text">
-      <h1 id="hero-h" data-enter-item>Skills, templates and guard hooks for agent repos</h1>
-      <p class="hero__lead" data-enter-item>A portable kit of plain Markdown and bash: ten workflow skills, tier-by-tier repo templates, three <code>PreToolUse</code> guard hooks with in-place shift renewal, and a frozen decision archive.</p>
+      <h1 id="hero-h" data-enter-item>Keep coding agents on the rails</h1>
+      <p class="hero__lead" data-enter-item>Long agent sessions drift, reviewers agree with the author's prose, and one bad push can hit <code>main</code>. <code>agent-playbook</code> stops that with ten plain-Markdown workflows and three bash guard hooks &mdash; no framework, no daemon, Nix optional.</p>
       <ul class="facts" data-enter-item aria-label="Repository facts">
         <li><strong>10</strong> workflow skills</li>
         <li><strong>3</strong> guard hooks</li>
         <li><strong>388</strong> hook checks passing</li>
       </ul>
       <div class="btn-row" data-enter-item>
-        <a class="btn btn--primary" href="#adopt">Adopt it in a repo</a>
+        <a class="btn btn--primary" href="#quickstart">Start in 30 seconds</a>
         <a class="btn btn--secondary" href="#guards">Try the guard simulator</a>
       </div>
     </div>
@@ -73,30 +73,81 @@
   </div>
 </section>
 
-<!-- 2. What it is and who it is for -->
-<section class="section" id="what" aria-labelledby="what-h">
+<!-- 2. Quickstart: just tell your agent -->
+<section class="section section--tint" id="quickstart" aria-labelledby="quickstart-h">
   <div class="wrap" data-reveal>
-    <h2 id="what-h">What agent-playbook is, and who it is for</h2>
-    <div class="split">
-      <div class="measure">
-        <p>agent-playbook is a set of plain files that tell a coding agent how to work in a repository: how to take an issue to a pull request, how to coordinate parallel workers, and how to review and publish their work. Other agents read their own skill directories, so the same files link straight into them.</p>
-        <p>It is for people who run agents in git repositories and want their rules written down, mechanically guarded, and versioned.</p>
-        <h3>Who it is for, by tier</h3>
-        <ul class="rules">
-          <li><strong>A solo or quick repo:</strong> Tier 0.</li>
-          <li><strong>An active product repo with parallel agents:</strong> Tier 1.</li>
-          <li><strong>Several hosts publishing to a protected branch:</strong> Tier 2.</li>
-        </ul>
+    <h2 id="quickstart-h">Install and use it by telling your agent</h2>
+    <p class="lead measure">You don't need to memorize flags or edit JSON by hand. Copy one prompt into Claude Code, Codex, or T3 Code and let your agent wire it up and verify every step.</p>
+
+    <div class="prompt-box">
+      <div class="prompt-box__tabs" role="tablist" aria-label="Choose a ready-to-paste agent prompt">
+        <button type="button" class="pill" role="tab" data-prompt-tab="install" aria-selected="true">1. Install the playbook</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="bootstrap" aria-selected="false">2. Set up my repo</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="ship" aria-selected="false">3. Ship an issue</button>
+        <button type="button" class="pill" role="tab" data-prompt-tab="renew" aria-selected="false">4. Renew a long shift</button>
       </div>
-      <div class="stack">
-        <h3>What it is not</h3>
-        <ul class="rules">
-          <li>Not a sandbox. The guards stop a well-meaning agent from drifting. Hard security boundaries live in Tier 2 credentials and brokered publishing.</li>
-          <li>Not a runtime. Nothing in the repository launches an agent or a daemon.</li>
-          <li>Not a substitute for a repo's own <code>AGENTS.md</code>. Keep only the rules the code cannot show.</li>
-        </ul>
+
+      <div class="prompt-box__panel" data-prompt-panel="install">
+        <p class="prompt-box__why"><strong>What happens:</strong> Your agent clones the kit, symlinks only its own skills (never overwriting yours), registers the three dormant guard hooks, and runs all 388 tests to prove it works.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
+<pre class="code code--prompt"><code>Clone https://github.com/Nitestack/agent-playbook into ~/agent-playbook, symlink its skills into my agent's skills directory without overwriting existing files or foreign links, and register its three PreToolUse guard hooks. Verify the install with bash hooks/tests/test-hooks.sh and bash hooks/tests/lint-skills.sh.</code></pre>
+        </div>
+      </div>
+
+      <div class="prompt-box__panel" data-prompt-panel="bootstrap" hidden>
+        <p class="prompt-box__why"><strong>What happens:</strong> Your agent reads your repo, detects your real build/test commands, writes a lean <code>AGENTS.md</code>, <code>REVIEW.md</code> and <code>docs/orchestration.md</code>, and checks that CI still passes.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
+<pre class="code code--prompt"><code>Use the bootstrap-repo skill to set up Tier 1 in this repository: write a short AGENTS.md with our real format, lint and test commands, add REVIEW.md and docs/orchestration.md, and verify every command actually passes.</code></pre>
+        </div>
+      </div>
+
+      <div class="prompt-box__panel" data-prompt-panel="ship" hidden>
+        <p class="prompt-box__why"><strong>What happens:</strong> One worker implements the issue in an isolated worktree with red-green TDD, then a fresh read-only reviewer checks a <code>.git</code>-free snapshot of the exact commit SHA.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
+<pre class="code code--prompt"><code>Use ticket-implement on issue #42 in an isolated worktree. Once tests are green, build a read-only review snapshot and run blind-review on the exact (PR, base_oid, head_oid) tuple before handing me the PR.</code></pre>
+        </div>
+      </div>
+
+      <div class="prompt-box__panel" data-prompt-panel="renew" hidden>
+        <p class="prompt-box__why"><strong>What happens:</strong> Your orchestrator bumps its shift generation in place, prints a compact recovery packet, and restarts with a clean context &mdash; keeping its guard, PR watches, heartbeat and live workers intact.</p>
+        <div class="code-wrap">
+          <button type="button" class="copy-btn" data-copy>Copy prompt</button>
+<pre class="code code--prompt"><code>Check playbook-registry.sh status and renew this orchestrator shift in place following the orchestrate skill so we get a fresh context without draining running workers or losing PR watches.</code></pre>
+        </div>
       </div>
     </div>
+
+    <p class="note measure">Guards stay completely inactive in ordinary sessions until you enroll a thread, so installing them never breaks your normal workflow. Prefer manual setup? Jump to <a href="#setup">Nix or symlinks</a>.</p>
+  </div>
+</section>
+
+<!-- 3. Why it exists: real problems, mechanical fixes -->
+<section class="section" id="what" aria-labelledby="what-h">
+  <div class="wrap" data-reveal>
+    <h2 id="what-h">Why teams add it to their repos</h2>
+    <p class="lead measure">Prompts alone decay over a long session. Each part of the kit targets a real failure mode seen in multi-agent runs.</p>
+    <div class="cards">
+      <article class="card">
+        <h3>Long orchestrator threads start coding</h3>
+        <p>After a few compactions, a coordinator forgets its role and starts editing files or debugging tests inline. <strong>Fix:</strong> one-command in-place shift renewal (<code>playbook-registry.sh renew</code>) plus a coordinator guard that blocks repo writes and builds.</p>
+      </article>
+      <article class="card">
+        <h3>Workers wander outside their worktree</h3>
+        <p>A parallel agent touches another ticket's files or pushes straight to <code>main</code>. <strong>Fix:</strong> <code>worker-guard.sh</code> confines writes to the ticket's worktree and refuses protected branches even if misbound.</p>
+      </article>
+      <article class="card">
+        <h3>Reviewers agree with the author's summary</h3>
+        <p>Handing a reviewer the author's transcript biases the verdict. <strong>Fix:</strong> <code>blind-review</code> runs in a fresh read-only context over a blob-exact, <code>.git</code>-free snapshot of one exact commit SHA.</p>
+      </article>
+      <article class="card">
+        <h3>Rebases silently invalidate approvals</h3>
+        <p>Clicking "Rebase and merge" creates unreviewed SHAs, while re-reviewing everything stalls the queue. <strong>Fix:</strong> exact-SHA fast-forward publishing paired with a 3-outcome rebase classifier.</p>
+      </article>
+    </div>
+    <p class="note measure">Not a sandbox and not a daemon: guards stop well-meaning agents from drifting, and Tier 2 adds hard credential separation when several hosts publish.</p>
   </div>
 </section>
 
@@ -403,8 +454,8 @@
 <!-- 10. Setup + Interactive Registry CLI -->
 <section class="section" id="setup" aria-labelledby="setup-h">
   <div class="wrap" data-reveal>
-    <h2 id="setup-h">Set it up with Nix, or without</h2>
-    <p class="lead measure">Nix is optional. The skills and templates are Markdown. The hooks need bash 4+, <code>jq</code>, <code>git</code> and GNU coreutils (on macOS, install GNU coreutils first).</p>
+    <h2 id="setup-h">Manual setup: Nix or symlinks</h2>
+    <p class="lead measure">Prefer wiring it up yourself instead of <a href="#quickstart">asking your agent</a>? Nix is optional, skills are Markdown, and hooks need only bash 4+, <code>jq</code>, <code>git</code> and GNU coreutils.</p>
     <div class="cards">
       <article class="card">
         <h3>With Nix and Home Manager</h3>

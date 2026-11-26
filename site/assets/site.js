@@ -260,20 +260,25 @@
     renderSimRole('coordinator');
   }
 
-  // ── 6. Registry CLI Tabs in Setup ────────────────────────────────────
-  var cliTabs = Array.prototype.slice.call(document.querySelectorAll('[data-cli-tab]'));
-  var cliPanels = Array.prototype.slice.call(document.querySelectorAll('[data-cli-panel]'));
-  cliTabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      var id = tab.getAttribute('data-cli-tab');
-      cliTabs.forEach(function (t) { t.setAttribute('aria-selected', String(t === tab)); });
-      cliPanels.forEach(function (p) { p.hidden = p.getAttribute('data-cli-panel') !== id; });
+  // ── 6. Quickstart Prompt Tabs & Registry CLI Tabs ────────────────────
+  function wireTabs(tabAttr, panelAttr) {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[' + tabAttr + ']'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('[' + panelAttr + ']'));
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var id = tab.getAttribute(tabAttr);
+        tabs.forEach(function (t) { t.setAttribute('aria-selected', String(t === tab)); });
+        panels.forEach(function (p) { p.hidden = p.getAttribute(panelAttr) !== id; });
+      });
     });
-  });
+  }
+  wireTabs('data-prompt-tab', 'data-prompt-panel');
+  wireTabs('data-cli-tab', 'data-cli-panel');
 
   // ── 7. Copy-to-clipboard on all code blocks ──────────────────────────
   document.querySelectorAll('[data-copy]').forEach(function (btn) {
     var resetTimer = null;
+    var defaultLabel = btn.textContent;
     btn.addEventListener('click', function () {
       var wrap = btn.closest('.code-wrap') || btn.closest('.term');
       var codeEl = wrap ? wrap.querySelector('code, .term__body') : null;
@@ -285,7 +290,7 @@
           btn.classList.add('is-copied');
           clearTimeout(resetTimer);
           resetTimer = setTimeout(function () {
-            btn.textContent = 'Copy';
+            btn.textContent = defaultLabel;
             btn.classList.remove('is-copied');
           }, 1600);
         });

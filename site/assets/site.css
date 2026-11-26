@@ -258,7 +258,29 @@ main a:not(.btn), .footer-links a, .nav a:not(.btn) {
 
 /* ── Sections ─────────────────────────────────────────── */
 .section { padding: var(--padt) 0 var(--padb); }
+.section--tint { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .section h2 { font-size: clamp(30px, 3.2vw, 44px); line-height: 1.12; margin-bottom: var(--s-5); max-width: 24ch; }
+
+/* Quickstart prompt box */
+.prompt-box {
+  background: var(--ground);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+}
+.prompt-box__tabs { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-4); }
+.prompt-box__panel[hidden] { display: none; }
+.prompt-box__why { font-size: 15.5px; color: var(--muted); margin: 0 0 var(--s-3); max-width: 68ch; }
+.prompt-box__why strong { color: var(--ink); }
+.code--prompt {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  padding-right: 118px;
+}
 .section--dark { background: var(--dark); color: var(--dark-ink); }
 .section--dark h2 { color: #ffffff; }
 .section--dark .lead { color: var(--dark-muted); }
